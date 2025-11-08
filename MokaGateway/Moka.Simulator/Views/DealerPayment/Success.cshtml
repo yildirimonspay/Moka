@@ -1,0 +1,11 @@
+@{
+ ViewData["Title"] = "Payment Submitted";
+}
+<h2>Payment Submitted</h2>
+@if (ViewBag.Json != null)
+{
+ <pre>@ViewBag.Json</pre>
+}
+<p>
+ <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">New Payment</a>
+</p>

@@ -1,0 +1,106 @@
+@model Moka.Simulator.Models.DealerPaymentInputModel
+@{
+ ViewData["Title"] = "Dealer Payment";
+}
+<h2>Dealer Payment</h2>
+<form asp-action="Create" method="post">
+ <div class="row">
+ <div class="col-md-6">
+ <h4>Authentication</h4>
+ <div class="mb-3">
+ <label asp-for="DealerCode" class="form-label"></label>
+ <input asp-for="DealerCode" class="form-control" />
+ <span asp-validation-for="DealerCode" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="Username" class="form-label"></label>
+ <input asp-for="Username" class="form-control" />
+ <span asp-validation-for="Username" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="Password" class="form-label"></label>
+ <input asp-for="Password" type="password" class="form-control" />
+ <span asp-validation-for="Password" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CheckKey" class="form-label"></label>
+ <input asp-for="CheckKey" class="form-control" />
+ <span asp-validation-for="CheckKey" class="text-danger"></span>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <h4>Payment</h4>
+ <div class="mb-3">
+ <label asp-for="CardHolderFullName" class="form-label"></label>
+ <input asp-for="CardHolderFullName" class="form-control" />
+ <span asp-validation-for="CardHolderFullName" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CardNumber" class="form-label"></label>
+ <input asp-for="CardNumber" class="form-control" autocomplete="off" />
+ <span asp-validation-for="CardNumber" class="text-danger"></span>
+ </div>
+ <div class="row mb-3">
+ <div class="col">
+ <label asp-for="ExpMonth" class="form-label"></label>
+ <select asp-for="ExpMonth" class="form-select" asp-items="Model.ExpireMonths"></select>
+ <span asp-validation-for="ExpMonth" class="text-danger"></span>
+ </div>
+ <div class="col">
+ <label asp-for="ExpYear" class="form-label"></label>
+ <select asp-for="ExpYear" class="form-select" asp-items="Model.ExpireYears"></select>
+ <span asp-validation-for="ExpYear" class="text-danger"></span>
+ </div>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CvcNumber" class="form-label"></label>
+ <input asp-for="CvcNumber" class="form-control" autocomplete="off" />
+ <span asp-validation-for="CvcNumber" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="Amount" class="form-label"></label>
+ <input asp-for="Amount" class="form-control" />
+ <span asp-validation-for="Amount" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="Currency" class="form-label"></label>
+ <input asp-for="Currency" class="form-control" />
+ <span asp-validation-for="Currency" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="InstallmentNumber" class="form-label"></label>
+ <input asp-for="InstallmentNumber" class="form-control" />
+ <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="VirtualPosOrderId" class="form-label"></label>
+ <input asp-for="VirtualPosOrderId" class="form-control" />
+ <span asp-validation-for="VirtualPosOrderId" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="OtherTrxCode" class="form-label"></label>
+ <input asp-for="OtherTrxCode" class="form-control" />
+ <span asp-validation-for="OtherTrxCode" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="VoidRefundReason" class="form-label"></label>
+ <input asp-for="VoidRefundReason" class="form-control" />
+ <span asp-validation-for="VoidRefundReason" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="ClientIP" class="form-label"></label>
+ <input asp-for="ClientIP" class="form-control" />
+ <span asp-validation-for="ClientIP" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="RedirectUrl" class="form-label"></label>
+ <input asp-for="RedirectUrl" class="form-control" />
+ <span asp-validation-for="RedirectUrl" class="text-danger"></span>
+ </div>
+ </div>
+ </div>
+ <button type="submit" class="btn btn-primary">Submit Payment</button>
+</form>
+@section Scripts {
+ <partial name="_ValidationScriptsPartial" />
+}
