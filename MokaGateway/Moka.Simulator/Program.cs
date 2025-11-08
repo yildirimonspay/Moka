@@ -6,6 +6,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
 // Bind Moka settings
 builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
+// In-memory cache to keep transient transaction data (e.g., CodeForHash)
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 

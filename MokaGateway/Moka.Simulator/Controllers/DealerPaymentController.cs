@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
 using Moka.Simulator.Models;
+using Microsoft.Extensions.Caching.Memory;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -14,13 +15,15 @@ public class DealerPaymentController : Controller
     private readonly ILogger<DealerPaymentController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MokaSettings _settings;
+    private readonly IMemoryCache _cache;
 
-    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory, Microsoft.Extensions.Options.IOptions<MokaSettings> settings)
+    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory, Microsoft.Extensions.Options.IOptions<MokaSettings> settings, IMemoryCache cache)
     {
         _config = config;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
         _settings = settings.Value;
+        _cache = cache;
     }
 
     [HttpGet]
@@ -39,26 +42,22 @@ public class DealerPaymentController : Controller
             PopulateLists(model);
             return View(model);
         }
-
         var mode = _settings.Mode ?? _config["Moka:Mode"] ?? "Test";
         var dealerCode = _settings.DealerCode ?? model.DealerCode;
         var username = _settings.Username ?? model.Username;
         var password = _settings.Password ?? model.Password;
         var postUrl = _settings.PostUrl ?? _config["Moka:PostUrl"];
         var redirectUrl = _settings.RedirectUrl ?? _config["Moka:RedirectUrl"] ?? model.RedirectUrl;
-
         if (string.IsNullOrWhiteSpace(postUrl))
         {
             ModelState.AddModelError(string.Empty, "PostUrl is not configured.");
             PopulateLists(model);
             return View(model);
         }
-
         var now = DateTime.UtcNow;
         var otherTrxCode = $"VN{now:ddMMyyyyHHmmssfff}";
         var cardNumber = (model.CardNumber ?? string.Empty).Replace(" ", string.Empty);
         var clientIp = mode.Equals("Test", StringComparison.OrdinalIgnoreCase) ? "127.0.0.1" : HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
-
         var request = new DealerPaymentServicePaymentRequest
         {
             PaymentDealerAuthentication = new PaymentDealerAuthentication
@@ -86,7 +85,6 @@ public class DealerPaymentController : Controller
                 ReturnHash =1
             }
         };
-
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = null };
         try
         {
@@ -104,7 +102,14 @@ public class DealerPaymentController : Controller
             foreach (var warning in result.Warnings) ModelState.AddModelError(string.Empty, warning);
             if (string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase) && result.Data?.Url is string url && !string.IsNullOrWhiteSpace(url))
             {
-                return Redirect(url);
+                // Step2: cache CodeForHash
+                _cache.Set($"moka:hash:{otherTrxCode}", result.Data.CodeForHash, TimeSpan.FromMinutes(15));
+                // Step3: show auto-submit form (simulate3D redirect)
+                var simulatedHash = Compute3DHash(dealerCode, otherTrxCode, result.Data.CodeForHash ?? string.Empty, password);
+                ViewBag.PostUrl = url; // url already points to callback in mock
+                ViewBag.Trx = otherTrxCode;
+                ViewBag.Hash = simulatedHash;
+                return View("GatewayRedirect");
             }
             if (!string.IsNullOrWhiteSpace(result.ResultCode)) ModelState.AddModelError(string.Empty, GetCardResultMessage(result.ResultCode));
             if (!string.IsNullOrWhiteSpace(result.ResultMessage)) ModelState.AddModelError(string.Empty, result.ResultMessage);
@@ -120,6 +125,31 @@ public class DealerPaymentController : Controller
         }
         PopulateLists(model);
         return View(model);
+    }
+
+    [HttpGet]
+    public IActionResult Callback(string? trx, string? resultCode = null, string? resultMessage = null, string? hash = null)
+    {
+        string? codeForHash = null;
+        if (!string.IsNullOrWhiteSpace(trx)) _cache.TryGetValue($"moka:hash:{trx}", out codeForHash);
+        bool verified = false;
+        if (!string.IsNullOrWhiteSpace(trx) && !string.IsNullOrWhiteSpace(hash) && !string.IsNullOrWhiteSpace(codeForHash))
+        {
+            var dealerCode = _settings.DealerCode ?? string.Empty;
+            var password = _settings.Password ?? string.Empty;
+            var expected = Compute3DHash(dealerCode, trx, codeForHash, password);
+            verified = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
+        }
+        ViewBag.Trx = trx;
+        ViewBag.ResultCode = resultCode;
+        ViewBag.ResultMessage = resultMessage;
+        ViewBag.Verified = verified;
+        if (verified)
+        {
+            // Step5: Payment confirmed. Placeholder for order creation logic.
+            _logger.LogInformation("Payment verified trx={trx}", trx);
+        }
+        return View();
     }
 
     private DealerPaymentInputModel BuildNewModel()
@@ -142,6 +172,12 @@ public class DealerPaymentController : Controller
     {
         using var sha = SHA256.Create();
         return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
+    }
+
+    private static string Compute3DHash(string dealerCode, string otherTrxCode, string codeForHash, string password)
+    {
+        var raw = dealerCode + otherTrxCode + codeForHash + password;
+        return Sha256(raw);
     }
 
     private static string GetCardResultMessage(string resultCode) => resultCode switch

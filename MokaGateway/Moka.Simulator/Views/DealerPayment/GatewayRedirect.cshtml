@@ -1,0 +1,23 @@
+@{
+ Layout = null;
+ var postUrl = (string)ViewBag.PostUrl!;
+ var trx = (string)ViewBag.Trx!;
+ var hash = (string)ViewBag.Hash!;
+}
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="utf-8" />
+ <title>Redirecting...</title>
+</head>
+<body onload="document.forms[0].submit()">
+ <form method="post" action="@postUrl">
+ <input type="hidden" name="trx" value="@trx" />
+ <input type="hidden" name="hash" value="@hash" />
+ <noscript>
+ <p>JavaScript kapalý. Devam etmek için butona týklayýn.</p>
+ <button type="submit">Devam</button>
+ </noscript>
+ </form>
+</body>
+</html>
