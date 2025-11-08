@@ -2,6 +2,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+// HttpClient for calling Moka.Api or external endpoints
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
