@@ -1,2 +1,8 @@
 # Ignore local Visual Studio settings
 .vs/
+
+# Ignore build output directories
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
