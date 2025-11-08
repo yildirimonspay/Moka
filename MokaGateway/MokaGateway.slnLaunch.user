@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "Moka.Api\\Moka.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Moka.Simulator\\Moka.Simulator.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
