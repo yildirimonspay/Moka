@@ -1,6 +1,7 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Bind settings
+builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

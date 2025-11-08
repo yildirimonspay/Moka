@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Moka.Contracts.Payments;
+using Moka.Contracts.Settings;
 using Moka.Simulator.Models;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,12 +13,14 @@ public class DealerPaymentController : Controller
     private readonly IConfiguration _config;
     private readonly ILogger<DealerPaymentController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly MokaSettings _settings;
 
-    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory)
+    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory, Microsoft.Extensions.Options.IOptions<MokaSettings> settings)
     {
         _config = config;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _settings = settings.Value;
     }
 
     [HttpGet]
@@ -36,12 +40,12 @@ public class DealerPaymentController : Controller
             return View(model);
         }
 
-        var mode = _config["Moka:Mode"] ?? "Test";
-        var dealerCode = _config["Moka:DealerCode"] ?? model.DealerCode;
-        var username = _config["Moka:Username"] ?? model.Username;
-        var password = _config["Moka:Password"] ?? model.Password;
-        var postUrl = _config["Moka:PostUrl"];
-        var redirectUrl = _config["Moka:RedirectUrl"] ?? model.RedirectUrl;
+        var mode = _settings.Mode ?? _config["Moka:Mode"] ?? "Test";
+        var dealerCode = _settings.DealerCode ?? model.DealerCode;
+        var username = _settings.Username ?? model.Username;
+        var password = _settings.Password ?? model.Password;
+        var postUrl = _settings.PostUrl ?? _config["Moka:PostUrl"];
+        var redirectUrl = _settings.RedirectUrl ?? _config["Moka:RedirectUrl"] ?? model.RedirectUrl;
 
         if (string.IsNullOrWhiteSpace(postUrl))
         {
@@ -55,16 +59,16 @@ public class DealerPaymentController : Controller
         var cardNumber = (model.CardNumber ?? string.Empty).Replace(" ", string.Empty);
         var clientIp = mode.Equals("Test", StringComparison.OrdinalIgnoreCase) ? "127.0.0.1" : HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
 
-        var request = new Moka.Contracts.Payments.DealerPaymentServicePaymentRequest
+        var request = new DealerPaymentServicePaymentRequest
         {
-            PaymentDealerAuthentication = new Moka.Contracts.Payments.PaymentDealerAuthentication
+            PaymentDealerAuthentication = new PaymentDealerAuthentication
             {
                 DealerCode = dealerCode,
                 Username = username,
                 Password = password,
                 CheckKey = Sha256((dealerCode ?? string.Empty) + "MK" + (username ?? string.Empty) + "PD" + (password ?? string.Empty))
             },
-            PaymentDealerRequest = new Moka.Contracts.Payments.PaymentDealerRequest
+            PaymentDealerRequest = new PaymentDealerRequest
             {
                 CardHolderFullName = model.CardHolderFullName,
                 CardNumber = cardNumber,
@@ -87,8 +91,7 @@ public class DealerPaymentController : Controller
         try
         {
             var client = _httpClientFactory.CreateClient();
-            var json = JsonSerializer.Serialize(request, jsonOptions);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var content = new StringContent(JsonSerializer.Serialize(request, jsonOptions), Encoding.UTF8, "application/json");
             using var response = await client.PostAsync(postUrl, content);
             if (!response.IsSuccessStatusCode)
             {
@@ -97,7 +100,7 @@ public class DealerPaymentController : Controller
                 return View(model);
             }
             var responseJson = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Moka.Contracts.Payments.DealerPaymentServicePaymentResult>(responseJson, jsonOptions) ?? new Moka.Contracts.Payments.DealerPaymentServicePaymentResult();
+            var result = JsonSerializer.Deserialize<DealerPaymentServicePaymentResult>(responseJson, jsonOptions) ?? new DealerPaymentServicePaymentResult();
             foreach (var warning in result.Warnings) ModelState.AddModelError(string.Empty, warning);
             if (string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase) && result.Data?.Url is string url && !string.IsNullOrWhiteSpace(url))
             {
@@ -123,8 +126,8 @@ public class DealerPaymentController : Controller
     {
         var model = new DealerPaymentInputModel();
         PopulateLists(model);
-        model.Currency = _config["Moka:Currency"] ?? "TRY";
-        model.RedirectUrl = _config["Moka:RedirectUrl"];
+        model.Currency = _settings.Mode == "Test" ? "TRY" : (model.Currency ?? "TRY");
+        model.RedirectUrl = _settings.RedirectUrl ?? _config["Moka:RedirectUrl"];
         return model;
     }
 

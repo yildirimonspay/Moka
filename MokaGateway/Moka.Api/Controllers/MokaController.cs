@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
 using Moka.Contracts.Payments;
+using Moka.Contracts.Settings;
+using Microsoft.Extensions.Options;
 
 namespace Moka.Api.Controllers;
 
@@ -8,6 +10,15 @@ namespace Moka.Api.Controllers;
 [Route("moka")]
 public class MokaController : ControllerBase
 {
+    private readonly ILogger<MokaController> _logger;
+    private readonly MokaSettings _settings;
+
+    public MokaController(ILogger<MokaController> logger, IOptions<MokaSettings> settings)
+    {
+        _logger = logger;
+        _settings = settings.Value;
+    }
+
     [HttpPost("pay")]
     public ActionResult<DealerPaymentServicePaymentResult> Pay([FromBody] DealerPaymentServicePaymentRequest request)
     {
@@ -24,8 +35,10 @@ public class MokaController : ControllerBase
             });
         }
 
+        _logger.LogInformation("Incoming payment OtherTrxCode={OtherTrxCode} Dealer={Dealer} Mode={Mode}", request.PaymentDealerRequest.OtherTrxCode, request.PaymentDealerAuthentication.DealerCode, _settings.Mode);
+
         var codeForHash = Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
-        var redirectUrl = request.PaymentDealerRequest.RedirectUrl ?? "https://example.com/return";
+        var redirectUrl = request.PaymentDealerRequest.RedirectUrl ?? _settings.RedirectUrl ?? "https://example.com/return";
 
         return Ok(new DealerPaymentServicePaymentResult
         {

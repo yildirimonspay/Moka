@@ -4,6 +4,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 // HttpClient for calling Moka.Api or external endpoints
 builder.Services.AddHttpClient();
+// Bind Moka settings
+builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
 
 var app = builder.Build();
 
