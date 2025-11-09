@@ -1,106 +1,88 @@
 @model Moka.Simulator.Models.DealerPaymentInputModel
 @{
-    ViewData["Title"] = "Dealer Payment";
+ ViewData["Title"] = "Dealer Payment";
+ var cards = Model.TestCards ?? new List<Moka.Simulator.Models.TestCard>();
 }
 <h2>Dealer Payment</h2>
+<div class="alert alert-info">
+ Sadece kart ve tutar bilgilerini giriniz. Diðer alanlar sunucu tarafýndan doldurulur.
+</div>
 <form asp-action="Create" method="post">
-    <div class="row">
-        <div class="col-md-6">
-            <h4>Authentication</h4>
-            <div class="mb-3">
-                <label asp-for="DealerCode" class="form-label"></label>
-                <input asp-for="DealerCode" class="form-control" />
-                <span asp-validation-for="DealerCode" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Username" class="form-label"></label>
-                <input asp-for="Username" class="form-control" />
-                <span asp-validation-for="Username" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Password" class="form-label"></label>
-                <input asp-for="Password" type="password" class="form-control" />
-                <span asp-validation-for="Password" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="CheckKey" class="form-label"></label>
-                <input asp-for="CheckKey" class="form-control" />
-                <span asp-validation-for="CheckKey" class="text-danger"></span>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <h4>Payment</h4>
-            <div class="mb-3">
-                <label asp-for="CardHolderFullName" class="form-label"></label>
-                <input asp-for="CardHolderFullName" class="form-control" />
-                <span asp-validation-for="CardHolderFullName" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="CardNumber" class="form-label"></label>
-                <input asp-for="CardNumber" class="form-control" autocomplete="off" />
-                <span asp-validation-for="CardNumber" class="text-danger"></span>
-            </div>
-            <div class="row mb-3">
-                <div class="col">
-                    <label asp-for="ExpMonth" class="form-label"></label>
-                    <select asp-for="ExpMonth" class="form-select" asp-items="Model.ExpireMonths"></select>
-                    <span asp-validation-for="ExpMonth" class="text-danger"></span>
-                </div>
-                <div class="col">
-                    <label asp-for="ExpYear" class="form-label"></label>
-                    <select asp-for="ExpYear" class="form-select" asp-items="Model.ExpireYears"></select>
-                    <span asp-validation-for="ExpYear" class="text-danger"></span>
-                </div>
-            </div>
-            <div class="mb-3">
-                <label asp-for="CvcNumber" class="form-label"></label>
-                <input asp-for="CvcNumber" class="form-control" autocomplete="off" />
-                <span asp-validation-for="CvcNumber" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Amount" class="form-label"></label>
-                <input asp-for="Amount" class="form-control" />
-                <span asp-validation-for="Amount" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="Currency" class="form-label"></label>
-                <input asp-for="Currency" class="form-control" />
-                <span asp-validation-for="Currency" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="InstallmentNumber" class="form-label"></label>
-                <input asp-for="InstallmentNumber" class="form-control" />
-                <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="VirtualPosOrderId" class="form-label"></label>
-                <input asp-for="VirtualPosOrderId" class="form-control" />
-                <span asp-validation-for="VirtualPosOrderId" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="OtherTrxCode" class="form-label"></label>
-                <input asp-for="OtherTrxCode" class="form-control" />
-                <span asp-validation-for="OtherTrxCode" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="VoidRefundReason" class="form-label"></label>
-                <input asp-for="VoidRefundReason" class="form-control" />
-                <span asp-validation-for="VoidRefundReason" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="ClientIP" class="form-label"></label>
-                <input asp-for="ClientIP" class="form-control" />
-                <span asp-validation-for="ClientIP" class="text-danger"></span>
-            </div>
-            <div class="mb-3">
-                <label asp-for="RedirectUrl" class="form-label"></label>
-                <input asp-for="RedirectUrl" class="form-control" />
-                <span asp-validation-for="RedirectUrl" class="text-danger"></span>
-            </div>
-        </div>
-    </div>
-    <button type="submit" class="btn btn-primary">Submit Payment</button>
+ <div class="row">
+ <div class="col-md-8">
+ <h4>Kart Bilgileri</h4>
+ <div class="mb-3">
+ <label class="form-label" for="testCardSelect">Test Kartý Seç</label>
+ <select id="testCardSelect" class="form-select">
+ <option value="">Test kart seçiniz...</option>
+ @foreach (var c in cards)
+ {
+ <option data-number="@c.Number" data-holder="@c.Holder" data-exp-month="@c.ExpMonth" data-exp-year="@c.ExpYear" data-cvc="@c.Cvc">@c.Brand - @c.Number</option>
+ }
+ </select>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CardHolderFullName" class="form-label"></label>
+ <input asp-for="CardHolderFullName" class="form-control" />
+ <span asp-validation-for="CardHolderFullName" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CardNumber" class="form-label"></label>
+ <input asp-for="CardNumber" class="form-control" autocomplete="off" />
+ <span asp-validation-for="CardNumber" class="text-danger"></span>
+ </div>
+ <div class="row mb-3">
+ <div class="col">
+ <label asp-for="ExpMonth" class="form-label"></label>
+ <select asp-for="ExpMonth" class="form-select" asp-items="Model.ExpireMonths"></select>
+ <span asp-validation-for="ExpMonth" class="text-danger"></span>
+ </div>
+ <div class="col">
+ <label asp-for="ExpYear" class="form-label"></label>
+ <select asp-for="ExpYear" class="form-select" asp-items="Model.ExpireYears"></select>
+ <span asp-validation-for="ExpYear" class="text-danger"></span>
+ </div>
+ </div>
+ <div class="mb-3">
+ <label asp-for="CvcNumber" class="form-label"></label>
+ <input asp-for="CvcNumber" class="form-control" autocomplete="off" />
+ <span asp-validation-for="CvcNumber" class="text-danger"></span>
+ </div>
+ <h4>Ödeme</h4>
+ <div class="mb-3">
+ <label asp-for="Amount" class="form-label"></label>
+ <input asp-for="Amount" class="form-control" />
+ <span asp-validation-for="Amount" class="text-danger"></span>
+ </div>
+ <div class="mb-3">
+ <label asp-for="InstallmentNumber" class="form-label"></label>
+ <input asp-for="InstallmentNumber" class="form-control" />
+ <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
+ </div>
+ </div>
+ </div>
+ <button type="submit" class="btn btn-primary">Ödemeyi Gönder</button>
 </form>
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+ <partial name="_ValidationScriptsPartial" />
+ <script>
+ (function(){
+ const select = document.getElementById('testCardSelect');
+ const cardNumber = document.getElementById('CardNumber');
+ const holder = document.getElementById('CardHolderFullName');
+ const expMonth = document.getElementById('ExpMonth');
+ const expYear = document.getElementById('ExpYear');
+ const cvc = document.getElementById('CvcNumber');
+ if(!select) return;
+ select.addEventListener('change', function(){
+ const opt = select.selectedOptions[0];
+ if(!opt || !opt.dataset.number) return;
+ holder && (holder.value = opt.dataset.holder || holder.value);
+ cardNumber && (cardNumber.value = opt.dataset.number);
+ expMonth && (expMonth.value = opt.dataset.expMonth);
+ expYear && (expYear.value = opt.dataset.expYear);
+ cvc && (cvc.value = opt.dataset.cvc);
+ });
+ })();
+ </script>
 }

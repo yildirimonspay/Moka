@@ -5,6 +5,7 @@ using Moka.Contracts.Settings;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Filters;
+using System.Text;
 
 namespace Moka.Api.Controllers;
 
@@ -28,15 +29,47 @@ public class MokaController : ControllerBase
     public async Task<ActionResult<DealerPaymentServicePaymentResult>> Pay([FromBody] DealerPaymentServicePaymentRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(new DealerPaymentServicePaymentResult { ResultCode = "InvalidRequest", ResultMessage = "Validation failed", Warnings = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList() });
+        {
+            return BadRequest(new DealerPaymentServicePaymentResult
+            {
+                ResultCode = "InvalidRequest",
+                ResultMessage = "Validation failed",
+                Warnings = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList()
+            });
+        }
 
-        if (string.IsNullOrWhiteSpace(request.PaymentDealerAuthentication.CheckKey))
+        var auth = request.PaymentDealerAuthentication;
+        if (auth is null)
         {
             return Ok(new DealerPaymentServicePaymentResult
             {
                 ResultCode = "PaymentDealer.CheckPaymentDealerAuthentication.InvalidRequest",
-                ResultMessage = "Missing CheckKey",
-                Warnings = new List<string> { "CheckKey is required" }
+                ResultMessage = "Missing auth"
+            });
+        }
+
+        // Validate account against configured settings (simple demo check)
+        if (!string.Equals(auth.DealerCode, _settings.DealerCode, StringComparison.Ordinal)
+            || !string.Equals(auth.Username, _settings.Username, StringComparison.Ordinal)
+            || !string.Equals(auth.Password, _settings.Password, StringComparison.Ordinal))
+        {
+            return Ok(new DealerPaymentServicePaymentResult
+            {
+                ResultCode = "PaymentDealer.CheckPaymentDealerAuthentication.InvalidAccount",
+                ResultMessage = "Invalid dealer credentials"
+            });
+        }
+
+        // Validate CheckKey by spec: SHA256(DealerCode+"MK"+Username+"PD"+Password)
+        var raw = (auth.DealerCode ?? string.Empty) + "MK" + (auth.Username ?? string.Empty) + "PD" + (auth.Password ?? string.Empty);
+        using var sha = SHA256.Create();
+        var expectedKey = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(auth.CheckKey) || !string.Equals(auth.CheckKey, expectedKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return Ok(new DealerPaymentServicePaymentResult
+            {
+                ResultCode = "PaymentDealer.CheckPaymentDealerAuthentication.InvalidRequest",
+                ResultMessage = "Invalid CheckKey"
             });
         }
 
@@ -77,7 +110,7 @@ public class MokaController : ControllerBase
         var password = _settings.Password ?? string.Empty;
         var raw = dealerCode + trx + codeForHash + password;
         using var sha = SHA256.Create();
-        var expected = Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        var expected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
         var ok = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
         _logger.LogInformation("3D verification trx={trx} expected={expected} provided={hash} result={res}", trx, expected, hash, ok);
 
@@ -93,15 +126,18 @@ public class MokaController : ControllerBase
     [HttpGet("payments")]
     public async Task<ActionResult<IEnumerable<object>>> ListPayments()
     {
-        var list = await _db.Payments.OrderByDescending(r => r.CreatedUtc).Select(r => new
-        {
-            r.OtherTrxCode,
-            r.TrxCode,
-            r.Amount,
-            r.Currency,
-            r.Status,
-            r.CreatedUtc
-        }).ToListAsync();
+        var list = await _db.Payments
+            .OrderByDescending(r => r.CreatedUtc)
+            .Select(r => new
+            {
+                r.OtherTrxCode,
+                r.TrxCode,
+                r.Amount,
+                r.Currency,
+                r.Status,
+                r.CreatedUtc
+            })
+            .ToListAsync();
         return Ok(list);
     }
 

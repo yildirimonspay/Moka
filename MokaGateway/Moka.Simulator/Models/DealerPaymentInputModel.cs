@@ -1,29 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System.ComponentModel.DataAnnotations;
 
 namespace Moka.Simulator.Models;
 
 public class DealerPaymentInputModel : IValidatableObject
 {
-    // Auth
-    [Required]
-    [Display(Name = "Dealer Code")]
-    public string? DealerCode { get; set; }
-
-    [Required]
-    [Display(Name = "Username")]
-    public string? Username { get; set; }
-
-    [Required]
-    [Display(Name = "Password")]
-    public string? Password { get; set; }
-
-    [Display(Name = "Check Key")]
-    public string? CheckKey { get; set; }
-
-    // Payment
+    // Card info
     [Required]
     [Display(Name = "Cardholder Name")]
     public string? CardHolderFullName { get; set; }
@@ -45,38 +27,29 @@ public class DealerPaymentInputModel : IValidatableObject
     [Display(Name = "CVC")]
     public string? CvcNumber { get; set; }
 
+    // Payment basics
     [Range(0.01, double.MaxValue)]
     [Display(Name = "Amount")]
-    public decimal Amount { get; set; }
-
-    [Display(Name = "Currency")]
-    public string? Currency { get; set; } = "TRY";
+    public decimal Amount { get; set; } = 100.99m;
 
     [Display(Name = "Installments")]
+    [Range(1, 12)]
     public int InstallmentNumber { get; set; } = 1;
 
-    [Display(Name = "Order Id")]
-    public string? VirtualPosOrderId { get; set; }
-
-    [Display(Name = "Other Trx Code")]
-    public string? OtherTrxCode { get; set; }
-
-    [Display(Name = "Void/Refund Reason")]
-    public int VoidRefundReason { get; set; }
-
-    [Display(Name = "Client IP")]
-    public string? ClientIP { get; set; }
-
-    [Display(Name = "Redirect Url")]
-    public string? RedirectUrl { get; set; }
-
+    // UI lists
     public IList<SelectListItem> ExpireMonths { get; set; } = new List<SelectListItem>();
     public IList<SelectListItem> ExpireYears { get; set; } = new List<SelectListItem>();
+
+    // Added for passing data to redirect view
+    public List<TestCard> TestCards { get; set; } = new();
+    public string? PostUrl { get; set; }
+    public string? Trx { get; set; }
+    public string? Hash { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (!int.TryParse(ExpMonth, out var m) || m < 1 || m > 12)
-            yield return new ValidationResult("Expiration month must be between1 and12", new[] { nameof(ExpMonth) });
+            yield return new ValidationResult("Expiration month must be between 1 and 12", new[] { nameof(ExpMonth) });
 
         if (!int.TryParse(ExpYear, out var y))
             yield return new ValidationResult("Expiration year is invalid", new[] { nameof(ExpYear) });

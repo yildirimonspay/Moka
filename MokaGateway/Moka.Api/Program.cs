@@ -15,7 +15,8 @@ builder.Host.UseSerilog();
 // EF Core - SQL Server (MokaContext)
 builder.Services.AddDbContext<Moka.Api.Data.MokaDbContext>(opt =>
 {
- var cs = builder.Configuration.GetConnectionString("MokaContext") ?? "Server=.;Database=MokaGateway;Trusted_Connection=True;TrustServerCertificate=True;";
+ var cs = builder.Configuration.GetConnectionString("MokaContext")
+ ?? "Server=.;Database=MokaGateway;Trusted_Connection=True;TrustServerCertificate=True;";
  opt.UseSqlServer(cs);
 });
 

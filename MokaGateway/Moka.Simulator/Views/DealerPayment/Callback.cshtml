@@ -1,36 +1,32 @@
+@model Moka.Simulator.Models.PaymentCallbackViewModel
 @{
     ViewData["Title"] = "Payment Callback";
-    bool verified = ViewBag.Verified is bool b && b;
-    int? orderId = ViewBag.OrderId as int?;
-    bool apiVerified = ViewBag.ApiVerified is bool bb && bb;
-    string localExpected = ViewBag.LocalExpectedHash as string;
-    string apiExpected = ViewBag.ApiExpectedHash as string;
 }
 <h2>Payment Callback</h2>
 <dl class="row">
     <dt class="col-sm-2">OtherTrxCode</dt>
-    <dd class="col-sm-10">@ViewBag.Trx</dd>
+    <dd class="col-sm-10">@Model.Trx</dd>
     <dt class="col-sm-2">trxCode</dt>
-    <dd class="col-sm-10">@ViewBag.TrxCode</dd>
+    <dd class="col-sm-10">@Model.TrxCode</dd>
     <dt class="col-sm-2">Result Code</dt>
-    <dd class="col-sm-10">@ViewBag.ResultCode</dd>
+    <dd class="col-sm-10">@Model.ResultCode</dd>
     <dt class="col-sm-2">Result Message</dt>
-    <dd class="col-sm-10">@ViewBag.ResultMessage</dd>
+    <dd class="col-sm-10">@Model.ResultMessage</dd>
     <dt class="col-sm-2">Local Verify</dt>
-    <dd class="col-sm-10">@(verified ? "Onaylandý" : "Onaylanamadý")</dd>
+    <dd class="col-sm-10">@(Model.Verified ? "Onaylandý" : "Onaylanamadý")</dd>
     <dt class="col-sm-2">Local Expected Hash</dt>
-    <dd class="col-sm-10">@localExpected</dd>
+    <dd class="col-sm-10">@Model.LocalExpectedHash</dd>
     <dt class="col-sm-2">API Verify</dt>
-    <dd class="col-sm-10">@(apiVerified ? "Onaylandý" : "—")</dd>
+    <dd class="col-sm-10">@(Model.ApiVerified ? "Onaylandý" : "Hayýr")</dd>
     <dt class="col-sm-2">API Expected Hash</dt>
-    <dd class="col-sm-10">@apiExpected</dd>
-    @if (verified && orderId.HasValue)
+    <dd class="col-sm-10">@Model.ApiExpectedHash</dd>
+    @if (Model.Verified && Model.OrderId.HasValue)
     {
         <dt class="col-sm-2">Sipariþ No</dt>
-        <dd class="col-sm-10">@orderId</dd>
+        <dd class="col-sm-10">@Model.OrderId</dd>
     }
 </dl>
-@if (verified)
+@if (Model.Verified)
 {
     <p>Ödeme doðrulandý ve sipariþ oluþturuldu.</p>
 }

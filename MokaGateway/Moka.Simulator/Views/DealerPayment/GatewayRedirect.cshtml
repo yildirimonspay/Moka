@@ -1,8 +1,9 @@
+@model Moka.Simulator.Models.DealerPaymentInputModel
 @{
  Layout = null;
- var postUrl = (string)ViewBag.PostUrl!;
- var otherTrx = (string)ViewBag.Trx!;
- var hash = (string)ViewBag.Hash!;
+ var postUrl = Model.PostUrl!;
+ var otherTrx = Model.Trx!;
+ var hash = Model.Hash!;
  var trxCode = $"ORDER-{otherTrx}"; // simulate bank order id
 }
 <!DOCTYPE html>
