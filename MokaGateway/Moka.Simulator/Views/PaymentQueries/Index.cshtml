@@ -1,0 +1,39 @@
+@model IReadOnlyList<Moka.Simulator.Services.PaymentItem>
+@{
+ ViewData["Title"] = "Remote Payments";
+}
+<h2>Remote Payments (Moka.Api)</h2>
+<table class="table table-sm table-striped">
+ <thead>
+ <tr>
+ <th>OtherTrxCode</th>
+ <th>trxCode</th>
+ <th>Amount</th>
+ <th>Currency</th>
+ <th>Status</th>
+ <th>CreatedUtc</th>
+ <th></th>
+ </tr>
+ </thead>
+ <tbody>
+ @foreach (var p in Model)
+ {
+ <tr>
+ <td>@p.OtherTrxCode</td>
+ <td>@p.TrxCode</td>
+ <td>@p.Amount</td>
+ <td>@p.Currency</td>
+ <td>@p.Status</td>
+ <td>@p.CreatedUtc.ToString("u")</td>
+ <td>
+ <a asp-controller="PaymentQueries" asp-action="DetailByOther" asp-route-id="@p.OtherTrxCode">Other</a> |
+ <a asp-controller="PaymentQueries" asp-action="DetailByTrx" asp-route-id="@p.TrxCode">Trx</a>
+ </td>
+ </tr>
+ }
+ </tbody>
+</table>
+<p>
+ <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">Yeni Ödeme</a>
+ <a class="btn btn-link" asp-controller="Orders" asp-action="Index">Sipariþler</a>
+</p>

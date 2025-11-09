@@ -1,24 +1,40 @@
 @{
- ViewData["Title"] = "Payment Callback";
- bool verified = ViewBag.Verified is bool b && b;
+    ViewData["Title"] = "Payment Callback";
+    bool verified = ViewBag.Verified is bool b && b;
+    int? orderId = ViewBag.OrderId as int?;
+    bool apiVerified = ViewBag.ApiVerified is bool bb && bb;
+    string localExpected = ViewBag.LocalExpectedHash as string;
+    string apiExpected = ViewBag.ApiExpectedHash as string;
 }
 <h2>Payment Callback</h2>
 <dl class="row">
- <dt class="col-sm-2">Transaction</dt>
- <dd class="col-sm-10">@ViewBag.Trx</dd>
- <dt class="col-sm-2">Result Code</dt>
- <dd class="col-sm-10">@ViewBag.ResultCode</dd>
- <dt class="col-sm-2">Result Message</dt>
- <dd class="col-sm-10">@ViewBag.ResultMessage</dd>
- <dt class="col-sm-2">Doðrulama</dt>
- <dd class="col-sm-10">
- @if (verified) { <span class="text-success">Onaylandý</span> } else { <span class="text-danger">Onaylanamadý</span> }
- </dd>
+    <dt class="col-sm-2">OtherTrxCode</dt>
+    <dd class="col-sm-10">@ViewBag.Trx</dd>
+    <dt class="col-sm-2">trxCode</dt>
+    <dd class="col-sm-10">@ViewBag.TrxCode</dd>
+    <dt class="col-sm-2">Result Code</dt>
+    <dd class="col-sm-10">@ViewBag.ResultCode</dd>
+    <dt class="col-sm-2">Result Message</dt>
+    <dd class="col-sm-10">@ViewBag.ResultMessage</dd>
+    <dt class="col-sm-2">Local Verify</dt>
+    <dd class="col-sm-10">@(verified ? "Onaylandý" : "Onaylanamadý")</dd>
+    <dt class="col-sm-2">Local Expected Hash</dt>
+    <dd class="col-sm-10">@localExpected</dd>
+    <dt class="col-sm-2">API Verify</dt>
+    <dd class="col-sm-10">@(apiVerified ? "Onaylandý" : "—")</dd>
+    <dt class="col-sm-2">API Expected Hash</dt>
+    <dd class="col-sm-10">@apiExpected</dd>
+    @if (verified && orderId.HasValue)
+    {
+        <dt class="col-sm-2">Sipariþ No</dt>
+        <dd class="col-sm-10">@orderId</dd>
+    }
 </dl>
 @if (verified)
 {
- <p>Ödeme doðrulandý. Sipariþ oluþturma / sonraki adýmlar burada tetiklenebilir.</p>
+    <p>Ödeme doðrulandý ve sipariþ oluþturuldu.</p>
 }
 <p>
- <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">Yeni Ödeme</a>
+    <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">Yeni Ödeme</a>
+    <a class="btn btn-link" asp-controller="Orders" asp-action="Index">Sipariþ Listesi</a>
 </p>

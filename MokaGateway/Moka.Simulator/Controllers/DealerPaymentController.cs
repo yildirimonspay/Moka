@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
 using Moka.Simulator.Models;
+using Moka.Simulator.Services;
 using Microsoft.Extensions.Caching.Memory;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,14 +17,16 @@ public class DealerPaymentController : Controller
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MokaSettings _settings;
     private readonly IMemoryCache _cache;
+    private readonly IOrderService _orders;
 
-    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory, Microsoft.Extensions.Options.IOptions<MokaSettings> settings, IMemoryCache cache)
+    public DealerPaymentController(IConfiguration config, ILogger<DealerPaymentController> logger, IHttpClientFactory httpClientFactory, Microsoft.Extensions.Options.IOptions<MokaSettings> settings, IMemoryCache cache, IOrderService orders)
     {
         _config = config;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
         _settings = settings.Value;
         _cache = cache;
+        _orders = orders;
     }
 
     [HttpGet]
@@ -102,11 +105,11 @@ public class DealerPaymentController : Controller
             foreach (var warning in result.Warnings) ModelState.AddModelError(string.Empty, warning);
             if (string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase) && result.Data?.Url is string url && !string.IsNullOrWhiteSpace(url))
             {
-                // Step2: cache CodeForHash
+                // cache hash and payment details for callback
                 _cache.Set($"moka:hash:{otherTrxCode}", result.Data.CodeForHash, TimeSpan.FromMinutes(15));
-                // Step3: show auto-submit form (simulate3D redirect)
-                var simulatedHash = Compute3DHash(dealerCode, otherTrxCode, result.Data.CodeForHash ?? string.Empty, password);
-                ViewBag.PostUrl = url; // url already points to callback in mock
+                _cache.Set($"moka:payment:{otherTrxCode}", new { Amount = model.Amount, Currency = model.Currency ?? "TL", Masked = MaskCard(cardNumber) }, TimeSpan.FromMinutes(30));
+                var simulatedHash = Compute3DHash(_settings.DealerCode ?? dealerCode, otherTrxCode, result.Data.CodeForHash ?? string.Empty, _settings.Password ?? password);
+                ViewBag.PostUrl = url;
                 ViewBag.Trx = otherTrxCode;
                 ViewBag.Hash = simulatedHash;
                 return View("GatewayRedirect");
@@ -127,27 +130,82 @@ public class DealerPaymentController : Controller
         return View(model);
     }
 
-    [HttpGet]
-    public IActionResult Callback(string? trx, string? resultCode = null, string? resultMessage = null, string? hash = null)
+    [HttpGet, HttpPost]
+    public async Task<IActionResult> Callback(string? trx, string? resultCode = null, string? resultMessage = null, string? hash = null)
     {
+        // Read new field names from Moka docs
+        var hashValue = Request.Form["hashValue"].FirstOrDefault();
+        var trxCode = Request.Form["trxCode"].FirstOrDefault();
+        var otherTrx = Request.Form["OtherTrxCode"].FirstOrDefault();
+
+        // Back-compat fallbacks
+        trx ??= otherTrx ?? Request.Form["trx"].FirstOrDefault();
+        hash ??= hashValue ?? Request.Form["hash"].FirstOrDefault();
+        resultCode ??= Request.Form["resultCode"].FirstOrDefault();
+        resultMessage ??= Request.Form["resultMessage"].FirstOrDefault();
+
         string? codeForHash = null;
         if (!string.IsNullOrWhiteSpace(trx)) _cache.TryGetValue($"moka:hash:{trx}", out codeForHash);
+
         bool verified = false;
+        string localExpected = string.Empty;
         if (!string.IsNullOrWhiteSpace(trx) && !string.IsNullOrWhiteSpace(hash) && !string.IsNullOrWhiteSpace(codeForHash))
         {
             var dealerCode = _settings.DealerCode ?? string.Empty;
             var password = _settings.Password ?? string.Empty;
-            var expected = Compute3DHash(dealerCode, trx, codeForHash, password);
-            verified = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
+            localExpected = Compute3DHash(dealerCode, trx, codeForHash, password);
+            verified = string.Equals(localExpected, hash, StringComparison.OrdinalIgnoreCase);
         }
+
+        // Remote verify (if configured)
+        bool apiVerified = false;
+        string? apiExpected = null;
+        if (!string.IsNullOrWhiteSpace(_settings.PostUrl) && !string.IsNullOrWhiteSpace(codeForHash) && !string.IsNullOrWhiteSpace(trx) && !string.IsNullOrWhiteSpace(hash))
+        {
+            try
+            {
+                var verifyUrl = _settings.PostUrl!.EndsWith("/pay", StringComparison.OrdinalIgnoreCase)
+                    ? _settings.PostUrl.Substring(0, _settings.PostUrl.Length -3) + "verify3d"
+                    : _settings.PostUrl.Replace("pay", "verify3d");
+                var form = new Dictionary<string, string>
+                {
+                    { "trx", trx! },
+                    { "hash", hash! },
+                    { "dealerCode", _settings.DealerCode ?? string.Empty },
+                    { "codeForHash", codeForHash! }
+                };
+                var client = _httpClientFactory.CreateClient();
+                using var response = await client.PostAsync(verifyUrl, new FormUrlEncodedContent(form));
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    apiVerified = doc.RootElement.TryGetProperty("verified", out var v) && v.GetBoolean();
+                    if (doc.RootElement.TryGetProperty("expected", out var exp)) apiExpected = exp.GetString();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Remote3D verification failed for trx={trx}", trx);
+            }
+        }
+
         ViewBag.Trx = trx;
+        ViewBag.TrxCode = trxCode;
         ViewBag.ResultCode = resultCode;
         ViewBag.ResultMessage = resultMessage;
         ViewBag.Verified = verified;
-        if (verified)
+        ViewBag.LocalExpectedHash = localExpected;
+        ViewBag.ApiVerified = apiVerified;
+        ViewBag.ApiExpectedHash = apiExpected;
+        if (verified && trx != null)
         {
-            // Step5: Payment confirmed. Placeholder for order creation logic.
-            _logger.LogInformation("Payment verified trx={trx}", trx);
+            if (_cache.TryGetValue($"moka:payment:{trx}", out dynamic? p))
+            {
+                var order = _orders.Create(trx, trxCode ?? string.Empty, (decimal)p.Amount, (string)p.Currency, (string)p.Masked);
+                ViewBag.OrderId = order.Id;
+            }
+            _logger.LogInformation("Payment verified trx={trx} trxCode={trxCode} (Local={local} Remote={remote})", trx, trxCode, verified, apiVerified);
         }
         return View();
     }
@@ -178,6 +236,12 @@ public class DealerPaymentController : Controller
     {
         var raw = dealerCode + otherTrxCode + codeForHash + password;
         return Sha256(raw);
+    }
+
+    private static string MaskCard(string number)
+    {
+        if (string.IsNullOrWhiteSpace(number) || number.Length <8) return "****";
+        return number.Substring(0,6) + new string('*', Math.Max(0, number.Length -10)) + number[^4..];
     }
 
     private static string GetCardResultMessage(string resultCode) => resultCode switch

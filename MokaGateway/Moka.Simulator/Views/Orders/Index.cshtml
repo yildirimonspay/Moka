@@ -1,0 +1,37 @@
+@model IReadOnlyCollection<Moka.Simulator.Models.Order>
+@{
+ ViewData["Title"] = "Orders";
+}
+<h2>Orders</h2>
+<table class="table table-striped">
+ <thead>
+ <tr>
+ <th>Id</th>
+ <th>Trx</th>
+ <th>Amount</th>
+ <th>Currency</th>
+ <th>Masked Card</th>
+ <th>Created (UTC)</th>
+ <th>Status</th>
+ <th></th>
+ </tr>
+ </thead>
+ <tbody>
+ @foreach (var o in Model)
+ {
+ <tr>
+ <td>@o.Id</td>
+ <td>@o.Trx</td>
+ <td>@o.Amount</td>
+ <td>@o.Currency</td>
+ <td>@o.MaskedCard</td>
+ <td>@o.CreatedUtc.ToString("u")</td>
+ <td>@o.Status</td>
+ <td><a asp-controller="Orders" asp-action="Details" asp-route-id="@o.Id">Details</a></td>
+ </tr>
+ }
+ </tbody>
+</table>
+<p>
+ <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">New Payment</a>
+</p>
