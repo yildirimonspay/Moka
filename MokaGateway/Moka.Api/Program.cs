@@ -12,11 +12,11 @@ Log.Logger = new LoggerConfiguration()
  .CreateLogger();
 builder.Host.UseSerilog();
 
-// EF Core - Sqlite
+// EF Core - SQL Server (MokaContext)
 builder.Services.AddDbContext<Moka.Api.Data.MokaDbContext>(opt =>
 {
- var cs = builder.Configuration.GetConnectionString("MokaDb") ?? "Data Source=moka.db";
- opt.UseSqlite(cs);
+ var cs = builder.Configuration.GetConnectionString("MokaContext") ?? "Server=.;Database=MokaGateway;Trusted_Connection=True;TrustServerCertificate=True;";
+ opt.UseSqlServer(cs);
 });
 
 // Bind settings
