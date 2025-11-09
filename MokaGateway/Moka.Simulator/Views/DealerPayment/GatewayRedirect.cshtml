@@ -1,28 +1,22 @@
 @model Moka.Simulator.Models.DealerPaymentInputModel
 @{
     Layout = null;
-    var postUrl = Model.PostUrl!;
-    var otherTrx = Model.Trx!;
-    var hash = Model.Hash!;
-    var trxCode = $"ORDER-{otherTrx}"; // simulate bank order id
+    var target = Model.PostUrl!;
 }
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <title>Redirecting...</title>
+ <meta charset="utf-8" />
+ <title>Redirecting...</title>
+ <meta http-equiv="refresh" content="0;url=@target" />
+ <script>
+ window.location.replace('@target');
+ </script>
 </head>
-<body onload="document.forms[0].submit()">
-    <form method="post" action="@postUrl">
-        <input type="hidden" name="hashValue" value="@hash" />
-        <input type="hidden" name="resultCode" value="000" />
-        <input type="hidden" name="resultMessage" value="Approved" />
-        <input type="hidden" name="trxCode" value="@trxCode" />
-        <input type="hidden" name="OtherTrxCode" value="@otherTrx" />
-        <noscript>
-            <p>JavaScript kapalý. Devam etmek için butona týklayýn.</p>
-            <button type="submit">Devam</button>
-        </noscript>
-    </form>
+<body>
+ <p>Yönlendiriliyor... Eðer yönlendirilmezseniz <a href="@target">buraya týklayýn</a>.</p>
+ <noscript>
+ <p>JavaScript kapalý. Devam etmek için <a href="@target">týklayýn</a>.</p>
+ </noscript>
 </body>
 </html>

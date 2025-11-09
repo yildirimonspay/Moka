@@ -116,3 +116,6 @@ Error Number:208,State:1,Class:16
 2025-11-10 01:23:11.251 +03:00 [Information]  Moka.Api started
 2025-11-10 01:23:32.668 +03:00 [Information] Moka.Api.Controllers.MokaController Stored payment otherTrx="VN09112025222325602" trxCode="ORDER-VN09112025222325602" amount=100.99
 2025-11-10 01:23:32.678 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/moka/pay" responded 200 in 6898.1048 ms
+2025-11-10 01:54:53.512 +03:00 [Warning] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property '"Amount"' on entity type '"PaymentEntity"'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
+2025-11-10 01:54:54.291 +03:00 [Information]  DB migration completed
+2025-11-10 01:54:54.477 +03:00 [Information]  Moka.Api started

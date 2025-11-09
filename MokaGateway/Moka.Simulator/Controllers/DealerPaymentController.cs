@@ -73,7 +73,7 @@ public class DealerPaymentController : Controller
         }
 
         DateTime now = DateTime.UtcNow;
-        string otherTrxCode = $"VN{now:ddMMyyyyHHmmssfff}";
+        string otherTrxCode = Guid.NewGuid().ToString("N");
         string cardNumber = (model.CardNumber ?? string.Empty).Replace(" ", string.Empty);
         string clientIp = mode.Equals("Test", StringComparison.OrdinalIgnoreCase) ? "127.0.0.1" : HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
 
@@ -111,7 +111,26 @@ public class DealerPaymentController : Controller
             msg.Content = new StringContent(JsonSerializer.Serialize(request, jsonOptions), Encoding.UTF8, "application/json");
             if (postUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase))
                 msg.Headers.Add("X-API-KEY", _config["ApiKeys:Primary"] ?? "dev-key");
+            
+            var httpLog = new Data.HttpLog
+            {
+                Direction = "Outbound",
+                Url = postUrl,
+                Method = "POST",
+                RequestHeaders = string.Join("\n", msg.Headers.Select(h => h.Key+":"+string.Join(',',h.Value)) ),
+                RequestBody = JsonSerializer.Serialize(request, jsonOptions)
+            };
+            _db.HttpLogs.Add(httpLog);
+            await _db.SaveChangesAsync();
+
             using HttpResponseMessage response = await client.SendAsync(msg);
+            
+            httpLog.Direction = "Outbound"; // keep
+            httpLog.StatusCode = (int)response.StatusCode;
+            httpLog.ResponseHeaders = string.Join("\n", response.Headers.Select(h => h.Key+":"+string.Join(',',h.Value)) );
+            string responseJson = await response.Content.ReadAsStringAsync();
+            httpLog.ResponseBody = responseJson;
+            await _db.SaveChangesAsync();
             
             if (!response.IsSuccessStatusCode)
             {
@@ -121,7 +140,6 @@ public class DealerPaymentController : Controller
                 return View(model);
             }
 
-            string responseJson = await response.Content.ReadAsStringAsync();
             DealerPaymentServicePaymentResult result = JsonSerializer.Deserialize<DealerPaymentServicePaymentResult>(responseJson, jsonOptions) ?? new DealerPaymentServicePaymentResult();
             foreach (string warning in result.Warnings) ModelState.AddModelError(string.Empty, warning);
            
@@ -129,10 +147,9 @@ public class DealerPaymentController : Controller
             {
                 _db.PaymentSessions.Add(new Data.PaymentSession { OtherTrxCode = otherTrxCode, CodeForHash = result.Data.CodeForHash ?? string.Empty, Amount = model.Amount, Currency = "TL", MaskedCard = MaskCard(cardNumber) });
                 await _db.SaveChangesAsync();
-                string simulatedHash = Compute3DHash(dealerCode, otherTrxCode, result.Data.CodeForHash ?? string.Empty, password);
-                model.PostUrl = url; // bank3D page
+                model.PostUrl = url;
                 model.Trx = otherTrxCode;
-                model.Hash = simulatedHash;
+                model.Hash = string.Empty;
                 return View("GatewayRedirect", model);
             }
 
@@ -158,6 +175,18 @@ public class DealerPaymentController : Controller
     public async Task<IActionResult> Callback(string? trx, string? resultCode = null, string? resultMessage = null, string? hash = null)
     {
         IFormCollection? form = Request.HasFormContentType ? Request.Form : null;
+        // Inbound HTTP log
+        var inboundLog = new Data.HttpLog
+        {
+            Direction = "Inbound",
+            Url = Request.Path + Request.QueryString,
+            Method = Request.Method,
+            RequestHeaders = string.Join("\n", Request.Headers.Select(h => h.Key+":"+string.Join(',',h.Value))) ,
+            RequestBody = form != null ? string.Join("&", form.Keys.Select(k => $"{k}={form[k].ToString()}")) : string.Empty
+        };
+        _db.HttpLogs.Add(inboundLog);
+        await _db.SaveChangesAsync();
+ 
         string? hashValue = form?["hashValue"].FirstOrDefault();
         string? trxCode = form?["trxCode"].FirstOrDefault();
         string? otherTrx = form?["OtherTrxCode"].FirstOrDefault();
@@ -174,42 +203,11 @@ public class DealerPaymentController : Controller
         string localExpected = string.Empty;
         if (session != null && !string.IsNullOrWhiteSpace(hash))
         {
-            string dealerCode = _settings.DealerCode ?? string.Empty;
-            string password = _settings.Password ?? string.Empty;
-            localExpected = Compute3DHash(dealerCode, trx!, session.CodeForHash, password);
+            // ReturnHash: CodeForHash + (resultCode == Success ? T : F)
+            string suffix = string.Equals(resultCode, "Success", StringComparison.OrdinalIgnoreCase) ? "T" : "F";
+            using SHA256 sha = SHA256.Create();
+            localExpected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes((session.CodeForHash ?? string.Empty) + suffix))).ToLowerInvariant();
             verified = string.Equals(localExpected, hash, StringComparison.OrdinalIgnoreCase);
-        }
-
-        bool apiVerified = false;
-        string? apiExpected = null;
-        if (session != null && !string.IsNullOrWhiteSpace(_settings.PostUrl) && !string.IsNullOrWhiteSpace(trx) && !string.IsNullOrWhiteSpace(hash))
-        {
-            try
-            {
-                string verifyUrl = _settings.PostUrl!.EndsWith("/pay", StringComparison.OrdinalIgnoreCase)
-                    ? _settings.PostUrl[..^3] + "verify3d"
-                    : _settings.PostUrl!.Replace("pay", "verify3d");
-                Dictionary<string, string> dict = new Dictionary<string, string>
-                {
-                    { "trx", trx! },
-                    { "hash", hash! },
-                    { "dealerCode", _settings.DealerCode ?? string.Empty },
-                    { "codeForHash", session!.CodeForHash }
-                };
-                HttpClient client = _httpClientFactory.CreateClient();
-                using HttpResponseMessage resp = await client.PostAsync(verifyUrl, new FormUrlEncodedContent(dict));
-                if (resp.IsSuccessStatusCode)
-                {
-                    string js = await resp.Content.ReadAsStringAsync();
-                    using JsonDocument doc = JsonDocument.Parse(js);
-                    apiVerified = doc.RootElement.TryGetProperty("verified", out JsonElement v) && v.GetBoolean();
-                    if (doc.RootElement.TryGetProperty("expected", out JsonElement exp)) apiExpected = exp.GetString();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Remote verify failed for trx={trx}", trx);
-            }
         }
 
         int? orderId = null;
@@ -229,8 +227,8 @@ public class DealerPaymentController : Controller
             ResultMessage = resultMessage,
             Verified = verified,
             LocalExpectedHash = localExpected,
-            ApiVerified = apiVerified,
-            ApiExpectedHash = apiExpected,
+            ApiVerified = false,
+            ApiExpectedHash = null,
             OrderId = orderId
         };
         return View(vm);
@@ -258,12 +256,6 @@ public class DealerPaymentController : Controller
     {
         using SHA256 sha = SHA256.Create();
         return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
-    }
-
-    private static string Compute3DHash(string dealerCode, string otherTrxCode, string codeForHash, string password)
-    {
-        string raw = dealerCode + otherTrxCode + codeForHash + password;
-        return Sha256(raw);
     }
 
     private static string MaskCard(string number)
