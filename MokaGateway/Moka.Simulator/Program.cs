@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Moka.Simulator.Data;
+using Moka.Simulator.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,14 +12,16 @@ builder.Services.AddHttpClient();
 builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
 // Compression
 builder.Services.AddResponseCompression();
+// Test data service
+builder.Services.AddSingleton<ITestDataService, TestDataService>();
 // Order service
-builder.Services.AddSingleton<Moka.Simulator.Services.IOrderService, Moka.Simulator.Services.OrderService>();
+builder.Services.AddSingleton<IOrderService, OrderService>();
 // Payment query service - typed HttpClient
-builder.Services.AddHttpClient<Moka.Simulator.Services.PaymentQueryService>();
-builder.Services.AddTransient<Moka.Simulator.Services.IPaymentQueryService>(sp => sp.GetRequiredService<Moka.Simulator.Services.PaymentQueryService>());
+builder.Services.AddHttpClient<PaymentQueryService>();
+builder.Services.AddTransient<IPaymentQueryService>(sp => sp.GetRequiredService<PaymentQueryService>());
 // Health checks
 builder.Services.AddHealthChecks();
-builder.Services.AddDbContext<Moka.Simulator.Data.SimulatorDbContext>(opt =>
+builder.Services.AddDbContext<SimulatorDbContext>(opt =>
 {
     var cs = builder.Configuration.GetConnectionString("MokaContext") ?? "Server=.;Database=MokaGateway;Trusted_Connection=True;TrustServerCertificate=True;";
     opt.UseSqlServer(cs);
@@ -29,13 +33,12 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<Moka.Simulator.Data.SimulatorDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<SimulatorDbContext>();
     try { db.Database.Migrate(); }
     catch { db.Database.EnsureCreated(); }
 }

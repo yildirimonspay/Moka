@@ -38,7 +38,7 @@ public class MokaController : ControllerBase
             });
         }
 
-        var auth = request.PaymentDealerAuthentication;
+        PaymentDealerAuthentication auth = request.PaymentDealerAuthentication;
         if (auth is null)
         {
             return Ok(new DealerPaymentServicePaymentResult
@@ -61,9 +61,9 @@ public class MokaController : ControllerBase
         }
 
         // Validate CheckKey by spec: SHA256(DealerCode+"MK"+Username+"PD"+Password)
-        var raw = (auth.DealerCode ?? string.Empty) + "MK" + (auth.Username ?? string.Empty) + "PD" + (auth.Password ?? string.Empty);
-        using var sha = SHA256.Create();
-        var expectedKey = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        string raw = (auth.DealerCode ?? string.Empty) + "MK" + (auth.Username ?? string.Empty) + "PD" + (auth.Password ?? string.Empty);
+        using SHA256 sha = SHA256.Create();
+        string expectedKey = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(auth.CheckKey) || !string.Equals(auth.CheckKey, expectedKey, StringComparison.OrdinalIgnoreCase))
         {
             return Ok(new DealerPaymentServicePaymentResult
@@ -73,13 +73,13 @@ public class MokaController : ControllerBase
             });
         }
 
-        var otherTrx = request.PaymentDealerRequest.OtherTrxCode ?? Guid.NewGuid().ToString("N");
-        var codeForHash = Guid.NewGuid().ToString().ToUpperInvariant();
-        var redirectUrl = request.PaymentDealerRequest.RedirectUrl ?? _settings.RedirectUrl ?? "https://example.com/return";
-        var trxCode = $"ORDER-{otherTrx}"; // simulate order id from bank
+        string otherTrx = request.PaymentDealerRequest.OtherTrxCode ?? Guid.NewGuid().ToString("N");
+        string codeForHash = Guid.NewGuid().ToString().ToUpperInvariant();
+        string redirectUrl = request.PaymentDealerRequest.RedirectUrl ?? _settings.RedirectUrl ?? "https://example.com/return";
+        string trxCode = $"ORDER-{otherTrx}"; // simulate order id from bank
 
         // Persist
-        var entity = new Data.PaymentEntity
+        Data.PaymentEntity entity = new Data.PaymentEntity
         {
             OtherTrxCode = otherTrx,
             TrxCode = trxCode,
@@ -93,25 +93,85 @@ public class MokaController : ControllerBase
         await _db.SaveChangesAsync();
         _logger.LogInformation("Stored payment otherTrx={otherTrx} trxCode={trxCode} amount={amount}", otherTrx, trxCode, request.PaymentDealerRequest.Amount);
 
+        // Return a bank-like3D page URL that will post back to merchant redirectUrl
+        string baseUrl = $"{Request.Scheme}://{Request.Host}";
+        string threeDUrl = $"{baseUrl}/moka/threeD?trx={Uri.EscapeDataString(otherTrx)}&redirect={Uri.EscapeDataString(redirectUrl)}";
+
         return Ok(new DealerPaymentServicePaymentResult
         {
             ResultCode = "Success",
             Data = new MokaData
             {
-                Url = $"{redirectUrl}?OtherTrxCode={Uri.EscapeDataString(otherTrx)}",
+                Url = threeDUrl,
                 CodeForHash = codeForHash
             }
         });
     }
 
+    [HttpGet("threeD")]
+    public async Task<IActionResult> ThreeD([FromQuery] string trx, [FromQuery] string redirect)
+    {
+        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.OtherTrxCode == trx);
+        if (entity == null) return NotFound("Transaction not found");
+        var sb = new StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>3D Secure Kod</title></head><body>");
+        sb.Append("<h3>3D Güvenlik Doðrulamasý</h3>");
+        sb.Append("<p>Telefonunuza gelen4 haneli kodu giriniz (demo:1234).</p>");
+        sb.Append("<form method='post' action='/moka/threeD'>");
+        sb.Append("<input type='hidden' name='trx' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(trx)).Append("' />");
+        sb.Append("<input type='hidden' name='redirect' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(redirect)).Append("' />");
+        sb.Append("<input name='code' maxlength='4' value='' autofocus pattern='[0-9]{4}' required />");
+        sb.Append("<button type='submit'>Doðrula</button>");
+        sb.Append("</form></body></html>");
+        var html = sb.ToString();
+        return Content(html, "text/html", Encoding.UTF8);
+    }
+
+    [HttpPost("threeD")]
+    public async Task<IActionResult> ThreeDSubmit([FromForm] string trx, [FromForm] string redirect, [FromForm] string code)
+    {
+        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.OtherTrxCode == trx);
+        if (entity == null) return NotFound("Transaction not found");
+        bool success = code == "1234"; // demo validation
+        string dealerCode = _settings.DealerCode ?? string.Empty;
+        string password = _settings.Password ?? string.Empty;
+        string hashRaw = dealerCode + trx + entity.CodeForHash + password;
+        using SHA256 sha = SHA256.Create();
+        string hash = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(hashRaw))).ToLowerInvariant();
+        entity.Status = success ? "Paid" : "Failed";
+        await _db.SaveChangesAsync();
+        string resultCode = success ? "" : "EX";
+        string resultMessage = success ? "" : "Kod geçersiz";
+        var sb = new StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>Yönlendiriliyor...</title></head><body onload='document.forms[0].submit()'>");
+        sb.Append("<form method='post' action='")
+          .Append(System.Net.WebUtility.HtmlEncode(redirect)).Append("'>");
+        sb.Append("<input type='hidden' name='hashValue' value='")
+          .Append(hash).Append("' />");
+        sb.Append("<input type='hidden' name='resultCode' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(resultCode)).Append("' />");
+        sb.Append("<input type='hidden' name='resultMessage' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(resultMessage)).Append("' />");
+        sb.Append("<input type='hidden' name='trxCode' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(entity.TrxCode)).Append("' />");
+        sb.Append("<input type='hidden' name='OtherTrxCode' value='")
+          .Append(System.Net.WebUtility.HtmlEncode(trx)).Append("' />");
+        sb.Append("<noscript><button type='submit'>Devam</button></noscript>");
+        sb.Append("</form></body></html>");
+        var html = sb.ToString();
+        return Content(html, "text/html", Encoding.UTF8);
+    }
+
     [HttpPost("verify3d")]
     public async Task<ActionResult<object>> Verify3D([FromForm] string trx, [FromForm] string hash, [FromForm] string dealerCode, [FromForm] string codeForHash)
     {
-        var password = _settings.Password ?? string.Empty;
-        var raw = dealerCode + trx + codeForHash + password;
-        using var sha = SHA256.Create();
-        var expected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
-        var ok = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
+        string password = _settings.Password ?? string.Empty;
+        string raw = dealerCode + trx + codeForHash + password;
+        using SHA256 sha = SHA256.Create();
+        string expected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        bool ok = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
         _logger.LogInformation("3D verification trx={trx} expected={expected} provided={hash} result={res}", trx, expected, hash, ok);
 
         var entity = await _db.Payments.FirstOrDefaultAsync(p => p.OtherTrxCode == trx);

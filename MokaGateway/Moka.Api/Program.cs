@@ -53,8 +53,8 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
  var db = scope.ServiceProvider.GetRequiredService<Moka.Api.Data.MokaDbContext>();
- try { db.Database.Migrate(); }
- catch { db.Database.EnsureCreated(); }
+ try { db.Database.Migrate(); Log.Information("DB migration completed"); }
+ catch { db.Database.EnsureCreated(); Log.Information("DB ensured created"); }
 }
 
 if (app.Environment.IsDevelopment())
@@ -67,10 +67,25 @@ if (app.Environment.IsDevelopment())
  });
 }
 
+// Push RequestPath into Serilog context
+app.Use(async (ctx, next) =>
+{
+ using (Serilog.Context.LogContext.PushProperty("RequestPath", ctx.Request.Path.Value))
+ {
+ await next();
+ }
+});
+
+// Emit request logs (Info by default)
+app.UseSerilogRequestLogging();
+
 app.UseHttpsRedirection();
 // Global API Key auth
 app.UseMiddleware<Moka.Api.Middleware.ApiKeyMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllers();
+
+Log.Information("Moka.Api started");
+
 app.Run();
