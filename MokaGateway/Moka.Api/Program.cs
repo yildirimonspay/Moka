@@ -27,20 +27,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
  c.SwaggerDoc("v1", new() { Title = "Moka.Api", Version = "v1" });
- // Simple header auth example
  c.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
  {
  Name = "X-API-KEY",
  Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
  In = Microsoft.OpenApi.Models.ParameterLocation.Header,
- Description = "Demo API key"
+ Description = "Provide the API key"
  });
  c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
  {
- {
- new Microsoft.OpenApi.Models.OpenApiSecurityScheme { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "ApiKey" } },
- Array.Empty<string>()
- }
+ { new Microsoft.OpenApi.Models.OpenApiSecurityScheme { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "ApiKey" } }, Array.Empty<string>() }
  });
  c.ExampleFilters();
 });
@@ -63,14 +59,17 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
  app.UseSwagger();
- app.UseSwaggerUI();
+ app.UseSwaggerUI(c =>
+ {
+ c.DisplayOperationId();
+ c.DocumentTitle = "Moka.Api";
+ });
 }
 
 app.UseHttpsRedirection();
-
+// Global API Key auth
+app.UseMiddleware<Moka.Api.Middleware.ApiKeyMiddleware>();
 app.UseAuthorization();
-
 app.MapHealthChecks("/health");
 app.MapControllers();
-
 app.Run();

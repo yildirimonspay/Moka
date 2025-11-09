@@ -5,13 +5,11 @@ using Moka.Contracts.Settings;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Filters;
-using Moka.Api.Security;
 
 namespace Moka.Api.Controllers;
 
 [ApiController]
 [Route("moka")]
-[ApiKey]
 public class MokaController : ControllerBase
 {
     private readonly ILogger<MokaController> _logger;
