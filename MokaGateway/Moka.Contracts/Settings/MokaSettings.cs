@@ -26,4 +26,7 @@ public class MokaSettings
  public string[]? KnownProductCodes { get; set; }
  public decimal DailyDealerLimit { get; set; } =100000m; // TL
  public decimal DailyCardLimit { get; set; } =50000m; // TL per BIN
+ // RedirectUrl security
+ public string[]? RedirectDomainWhitelist { get; set; }
+ public string? RedirectHmacSecret { get; set; }
 }
