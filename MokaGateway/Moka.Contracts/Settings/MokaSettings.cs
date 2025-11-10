@@ -16,10 +16,14 @@ public class MokaSettings
  public bool AllowPreAuth { get; set; } = false;
  public bool AllowTokenization { get; set; } = false;
  public int MaxInstallment { get; set; } =12;
+ public int MaxInstallmentPerVirtualPos { get; set; } =6;
+ public bool RequireCommissionForInstallments { get; set; } = false;
  public string[]? AllowedCurrencies { get; set; } = new[] { "TL", "USD", "EUR", "GBP" };
  public string[]? ForeignCurrenciesEnabled { get; set; } = new[] { "USD", "EUR" }; // subset dealer allowed
  public string[]? AllowedBins { get; set; } = new[] { "4", "5" }; // simple BIN prefixes
  public string[]? AllowedSubMerchants { get; set; }
  public string[]? AllowedSoftware { get; set; }
  public string[]? KnownProductCodes { get; set; }
+ public decimal DailyDealerLimit { get; set; } =100000m; // TL
+ public decimal DailyCardLimit { get; set; } =50000m; // TL per BIN
 }

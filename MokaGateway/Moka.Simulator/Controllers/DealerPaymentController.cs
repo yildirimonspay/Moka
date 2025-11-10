@@ -112,13 +112,19 @@ public class DealerPaymentController : Controller
             if (postUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase))
                 msg.Headers.Add("X-API-KEY", _config["ApiKeys:Primary"] ?? "dev-key");
             
+            var requestJsonForLog = JsonSerializer.Serialize(request, jsonOptions);
+            if (!string.IsNullOrWhiteSpace(cardNumber))
+            {
+                var masked = MaskCard(cardNumber);
+                requestJsonForLog = requestJsonForLog.Replace(cardNumber, masked);
+            }
             var httpLog = new Data.HttpLog
             {
                 Direction = "Outbound",
                 Url = postUrl,
                 Method = "POST",
                 RequestHeaders = string.Join("\n", msg.Headers.Select(h => h.Key+":"+string.Join(',',h.Value)) ),
-                RequestBody = JsonSerializer.Serialize(request, jsonOptions)
+                RequestBody = requestJsonForLog
             };
             _db.HttpLogs.Add(httpLog);
             await _db.SaveChangesAsync();
@@ -145,6 +151,8 @@ public class DealerPaymentController : Controller
            
             if (string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase) && result.Data?.Url is string url && !string.IsNullOrWhiteSpace(url))
             {
+                // Extract nonce in RedirectUrl from API by following threeD page query? The Data.Url points to3D page; nonce is inside the stored RedirectUrl at API side.
+                // We can't see RedirectUrl here; pass nonce via query? Fallback: capture nonce from Callback query when it comes.
                 _db.PaymentSessions.Add(new Data.PaymentSession { OtherTrxCode = otherTrxCode, CodeForHash = result.Data.CodeForHash ?? string.Empty, Amount = model.Amount, Currency = "TL", MaskedCard = MaskCard(cardNumber) });
                 await _db.SaveChangesAsync();
                 model.PostUrl = url;
@@ -190,6 +198,7 @@ public class DealerPaymentController : Controller
         string? hashValue = form?["hashValue"].FirstOrDefault();
         string? trxCode = form?["trxCode"].FirstOrDefault();
         string? otherTrx = form?["OtherTrxCode"].FirstOrDefault();
+        string? authorizationCode = form?["authorizationCode"].FirstOrDefault();
         trx ??= otherTrx ?? Request.Query["trx"].FirstOrDefault();
         hash ??= hashValue ?? Request.Query["hash"].FirstOrDefault();
         resultCode ??= form?["resultCode"].FirstOrDefault() ?? Request.Query["resultCode"].FirstOrDefault();
@@ -210,10 +219,23 @@ public class DealerPaymentController : Controller
             verified = string.Equals(localExpected, hash, StringComparison.OrdinalIgnoreCase);
         }
 
+        // nonce validation
+        string? nonce = form?["nonce"].FirstOrDefault() ?? Request.Query["nonce"].FirstOrDefault();
+        if (session != null && !string.IsNullOrWhiteSpace(nonce))
+        {
+            session.MerchantNonce = nonce;
+            await _db.SaveChangesAsync();
+        }
+        // include nonce check if we have stored previously
+        bool nonceOk = true;
+        if (session?.MerchantNonce != null && nonce != null)
+            nonceOk = string.Equals(session.MerchantNonce, nonce, StringComparison.Ordinal);
+        verified = verified && nonceOk;
+
         int? orderId = null;
         if (verified && session != null)
         {
-            session.TrxCode = trxCode ?? session.TrxCode;
+            session.TrxCode = authorizationCode ?? trxCode ?? session.TrxCode;
             Order order = _orders.Create(trx!, session.TrxCode ?? string.Empty, session.Amount, session.Currency, session.MaskedCard);
             orderId = order.Id;
             await _db.SaveChangesAsync();

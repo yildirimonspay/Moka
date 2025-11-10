@@ -22,6 +22,7 @@ public class SimulatorDbContext : DbContext
             e.HasIndex(x => x.OtherTrxCode).IsUnique();
             e.Property(x => x.Currency).HasMaxLength(8);
             e.Property(x => x.MaskedCard).HasMaxLength(32);
+            e.Property(x => x.MerchantNonce).HasMaxLength(64);
         });
     }
 }
@@ -49,5 +50,6 @@ public class PaymentSession
     public string Currency { get; set; } = "TL";
     public string MaskedCard { get; set; } = string.Empty;
     public string? TrxCode { get; set; }
+    public string? MerchantNonce { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }

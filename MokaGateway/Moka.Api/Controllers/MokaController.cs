@@ -164,6 +164,35 @@ public class MokaController : ControllerBase
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = first.ErrorMessage, ResultMessage = string.Empty, Data = null });
         }
 
+        // Daily limits (simple aggregate for today)
+        DateTime today = DateTime.UtcNow.Date;
+        decimal dealerToday = await _db.Payments.Where(p => p.CreatedUtc >= today && p.CreatedUtc < today.AddDays(1)).SumAsync(p => p.Amount);
+        if (dealerToday + request.PaymentDealerRequest.Amount > _settings.DailyDealerLimit)
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckDealerPaymentLimits.DailyDealerLimitExceeded", ResultMessage = "Dealer daily limit exceeded", Data = null });
+        string cardBin = new string((request.PaymentDealerRequest.CardNumber ?? "").Where(char.IsDigit).ToArray());
+        cardBin = cardBin.Length >=6 ? cardBin.Substring(0,6) : cardBin;
+        decimal cardToday = await _db.Payments.Where(p => p.CreatedUtc >= today && p.CreatedUtc < today.AddDays(1) && p.OtherTrxCode.StartsWith(cardBin)).SumAsync(p => p.Amount); // simplistic
+        if (cardToday + request.PaymentDealerRequest.Amount > _settings.DailyCardLimit)
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckDealerPaymentLimits.DailyCardLimitExceeded", ResultMessage = "Card daily limit exceeded", Data = null });
+        // Max installment dealer-level
+        if (request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallment)
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ThisInstallmentNumberNotAvailableForDealer", ResultMessage = "Installment exceeds dealer max", Data = null });
+
+        // Virtual POS availability by BIN (simulate). If BIN not allowed => VirtualPosNotFound
+        if (_settings.AllowedBins != null && _settings.AllowedBins.Length>0 && !string.IsNullOrWhiteSpace(cardBin) && !_settings.AllowedBins.Any(b => cardBin.StartsWith(b)))
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckPaymentDealerAuthentication.VirtualPosNotFound", ResultMessage = "Virtual POS not found for BIN", Data = null });
+        // Installment number exceeds virtual pos capability
+        if (request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallmentPerVirtualPos)
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ThisInstallmentNumberNotAvailableForVirtualPos", ResultMessage = "Installment exceeds virtual pos limit", Data = null });
+        // Commission required for installments
+        if (_settings.RequireCommissionForInstallments && request.PaymentDealerRequest.InstallmentNumber >1 && (request.PaymentDealerRequest.CommissionRate == null || request.PaymentDealerRequest.GroupCommissionRate == null))
+        {
+            if (request.PaymentDealerRequest.CommissionRate == null)
+                return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerCommissionRateNotFound", ResultMessage = "Dealer commission missing", Data = null });
+            if (request.PaymentDealerRequest.GroupCommissionRate == null)
+                return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerGroupCommissionRateNotFound", ResultMessage = "Group commission missing", Data = null });
+        }
+
         // generate nonce and append to redirect url
         string otherTrx = request.PaymentDealerRequest.OtherTrxCode ?? Guid.NewGuid().ToString("N");
         string codeForHash = Guid.NewGuid().ToString().ToUpperInvariant();
@@ -173,6 +202,11 @@ public class MokaController : ControllerBase
         else redirectUrl += "&nonce=" + Uri.EscapeDataString(nonce);
         string trxCode = $"ORDER-{otherTrx}"; // simulate order id from bank
         string threeDTrxCode = Guid.NewGuid().ToString("N");
+
+        string cardBinForEntity = new string((request.PaymentDealerRequest.CardNumber ?? "").Where(char.IsDigit).ToArray());
+        cardBinForEntity = cardBinForEntity.Length >=6 ? cardBinForEntity.Substring(0,6) : cardBinForEntity;
+        // generate authorization code placeholder (will be final after bank callback)
+        string provisionalAuthCode = ""; // empty until bank authorization
 
         var entity = new Data.PaymentEntity
         {
@@ -185,6 +219,8 @@ public class MokaController : ControllerBase
             Amount = request.PaymentDealerRequest.Amount,
             Currency = request.PaymentDealerRequest.Currency ?? "TL",
             Status = "Pending3D",
+            CardBin = cardBinForEntity,
+            AuthorizationCode = provisionalAuthCode,
             CreatedUtc = DateTime.UtcNow
         };
         _db.Payments.Add(entity);
@@ -204,85 +240,6 @@ public class MokaController : ControllerBase
                 CodeForHash = codeForHash
             }
         });
-    }
-
-    [HttpGet("PaymentDealerThreeDProcess")]
-    public async Task<IActionResult> ThreeD([FromQuery] string threeDTrxCode)
-    {
-        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.ThreeDTrxCode == threeDTrxCode);
-        if (entity == null) return NotFound("Transaction not found");
-        var sb = new StringBuilder();
-        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>3D Secure Kod</title></head><body>");
-        sb.Append("<h3>3D Güvenlik Doðrulamasý</h3><p>Telefonunuza gelen4 haneli kodu giriniz (demo:1234).</p>");
-        sb.Append("<form method='post' action='/PaymentDealer/PaymentDealerThreeDProcess'>");
-        sb.Append("<input type='hidden' name='threeDTrxCode' value='").Append(System.Net.WebUtility.HtmlEncode(threeDTrxCode)).Append("' />");
-        sb.Append("<input name='code' maxlength='4' autofocus pattern='[0-9]{4}' required />");
-        sb.Append("<button type='submit'>Doðrula</button></form></body></html>");
-        return Content(sb.ToString(), "text/html", Encoding.UTF8);
-    }
-
-    [HttpPost("PaymentDealerThreeDProcess")]
-    public async Task<IActionResult> ThreeDSubmit([FromForm] string threeDTrxCode, [FromForm] string code)
-    {
-        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.ThreeDTrxCode == threeDTrxCode);
-        if (entity == null) return NotFound("Transaction not found");
-        bool success = code == "1234";
-        // ReturnHash rule: CodeForHash + T/F -> SHA256
-        string suffix = success ? "T" : "F";
-        using SHA256 sha = SHA256.Create();
-        string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
-        entity.Status = success ? "Paid" : "Failed";
-        await _db.SaveChangesAsync();
-        string resultCode = success ? "Success" : "EX";
-        string resultMessage = success ? "" : "Kod geçersiz";
-        var sb = new StringBuilder();
-        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>Yönlendiriliyor...</title></head><body onload='document.forms[0].submit()'>");
-        sb.Append("<form method='post' action='").Append(System.Net.WebUtility.HtmlEncode(entity.RedirectUrl)).Append("'>");
-        sb.Append("<input type='hidden' name='hashValue' value='").Append(hashValue).Append("' />");
-        sb.Append("<input type='hidden' name='resultCode' value='").Append(System.Net.WebUtility.HtmlEncode(resultCode)).Append("' />");
-        sb.Append("<input type='hidden' name='resultMessage' value='").Append(System.Net.WebUtility.HtmlEncode(resultMessage)).Append("' />");
-        sb.Append("<input type='hidden' name='trxCode' value='").Append(System.Net.WebUtility.HtmlEncode(entity.TrxCode)).Append("' />");
-        sb.Append("<input type='hidden' name='OtherTrxCode' value='").Append(System.Net.WebUtility.HtmlEncode(entity.OtherTrxCode)).Append("' />");
-        sb.Append("<noscript><button type='submit'>Devam</button></noscript></form></body></html>");
-        // also send optional notify POST
-        string? notify = _settings.NotifyUrl;
-        if (!string.IsNullOrWhiteSpace(notify))
-        {
-            try
-            {
-                using var http = new HttpClient();
-                var dict = new Dictionary<string, string>
-                {
-                    {"hashValue", hashValue},
-                    {"resultCode", resultCode},
-                    {"resultMessage", resultMessage},
-                    {"trxCode", entity.TrxCode},
-                    {"OtherTrxCode", entity.OtherTrxCode}
-                };
-                var resp = await http.PostAsync(notify, new FormUrlEncodedContent(dict));
-                var okText = await resp.Content.ReadAsStringAsync();
-                _logger.LogInformation("Notify POST to {notify} status {status} body '{body}'", notify, resp.StatusCode, okText);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Notify POST failed for trx={trx}", entity.OtherTrxCode);
-            }
-        }
-        return Content(sb.ToString(), "text/html", Encoding.UTF8);
-    }
-
-    [HttpPost("verify3d")]
-    public async Task<ActionResult<object>> Verify3D([FromForm] string trx, [FromForm] string hash, [FromForm] string dealerCode, [FromForm] string codeForHash)
-    {
-        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.OtherTrxCode == trx);
-        if (entity == null) return NotFound(new { verified = false, reason = "not_found" });
-        bool success = string.Equals(entity.Status, "Paid", StringComparison.OrdinalIgnoreCase);
-        string suffix = success ? "T" : "F";
-        using SHA256 sha = SHA256.Create();
-        string expected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
-        bool ok = string.Equals(expected, hash, StringComparison.OrdinalIgnoreCase);
-        _logger.LogInformation("verify3d trx={trx} expected={expected} provided={hash} result={ok}", trx, expected, hash, ok);
-        return Ok(new { verified = ok, expected, provided = hash });
     }
 
     [HttpGet("payments")]
@@ -314,5 +271,21 @@ public class MokaController : ControllerBase
     {
         var r = await _db.Payments.FirstOrDefaultAsync(p => p.TrxCode == trxCode);
         return r is null ? NotFound() : Ok(r);
+    }
+
+    [HttpPost("BankAuthorizationCallback")] // simulated bank -> united
+    public async Task<ActionResult<object>> BankAuthorizationCallback([FromForm] string threeDTrxCode, [FromForm] string authResult)
+    {
+        var entity = await _db.Payments.FirstOrDefaultAsync(p => p.ThreeDTrxCode == threeDTrxCode);
+        if (entity == null) return NotFound(new { ok=false, reason="not_found" });
+        bool success = authResult == "OK";
+        entity.Status = success ? "Paid" : "Failed";
+        // inside BankAuthorizationCallback before saving
+        if (success)
+        {
+            entity.AuthorizationCode = Guid.NewGuid().ToString("N").Substring(0,12).ToUpperInvariant();
+        }
+        await _db.SaveChangesAsync();
+        return Ok(new { ok=true, paid=success });
     }
 }

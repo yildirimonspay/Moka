@@ -15,10 +15,13 @@ public class MokaDbContext : DbContext
             e.HasIndex(x => x.TrxCode).IsUnique();
             e.HasIndex(x => x.ThreeDTrxCode).IsUnique();
             e.HasIndex(x => x.Nonce);
+            e.HasIndex(x => x.CardBin);
             e.Property(x => x.Currency).HasMaxLength(8);
             e.Property(x => x.Status).HasMaxLength(32);
             e.Property(x => x.RedirectUrl).HasMaxLength(2048);
             e.Property(x => x.Nonce).HasMaxLength(64);
+            e.Property(x => x.AuthorizationCode).HasMaxLength(32);
+            e.Property(x => x.CardBin).HasMaxLength(8);
         });
     }
 }
@@ -32,6 +35,8 @@ public class PaymentEntity
     public string ThreeDTrxCode { get; set; } = string.Empty;
     public string RedirectUrl { get; set; } = string.Empty;
     public string Nonce { get; set; } = string.Empty;
+    public string AuthorizationCode { get; set; } = string.Empty; // generated on authorization success
+    public string CardBin { get; set; } = string.Empty; // first6 digits of card
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "TL";
     public string Status { get; set; } = "Pending3D";
