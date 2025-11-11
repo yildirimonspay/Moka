@@ -66,7 +66,7 @@ public class DealerPaymentController : Controller
         string? redirectUrl = _settings.RedirectUrl ?? _config["Moka:RedirectUrl"];
         if (string.IsNullOrWhiteSpace(postUrl))
         {
-            ModelState.AddModelError(string.Empty, "PostUrl is not configured.");
+            ModelState.AddModelError(string.Empty, "PostUrl yapýlandýrýlmadý.");
             PopulateLists(model);
             model.TestCards = _testData.GetTestCards();
             return View(model);
@@ -159,6 +159,15 @@ public class DealerPaymentController : Controller
                 model.Trx = otherTrxCode;
                 model.Hash = string.Empty;
                 return View("GatewayRedirect", model);
+            }
+            // If we got a non-success code, prepare auto POST to Callback so UI shows unified result
+            if (!string.IsNullOrWhiteSpace(result.ResultCode) && !string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase))
+            {
+                ViewBag.ResultCode = result.ResultCode;
+                ViewBag.ResultMessage = result.ResultMessage ?? _testData.GetErrorMessage(result.ResultCode);
+                model.Trx = otherTrxCode;
+                model.Hash = string.Empty; // hash unknown since bank not reached
+                return View("GatewayPost", model);
             }
 
             if (!string.IsNullOrWhiteSpace(result.ResultCode)) ModelState.AddModelError(string.Empty, _testData.GetErrorMessage(result.ResultCode));
@@ -253,6 +262,25 @@ public class DealerPaymentController : Controller
             ApiExpectedHash = null,
             OrderId = orderId
         };
+
+        string? signature = form?["signature"].FirstOrDefault() ?? Request.Query["signature"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(signature))
+        {
+            var expectedSigPayload = $"trxCode={trxCode}&OtherTrxCode={otherTrx}&resultCode={resultCode}&hashValue={hash}&nonce={form?["nonce"].FirstOrDefault()}";
+            var secret = _settings.RedirectHmacSecret;
+            string expectedSig = string.Empty;
+            if (!string.IsNullOrWhiteSpace(secret))
+            {
+                using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secret));
+                expectedSig = Convert.ToHexString(h.ComputeHash(Encoding.UTF8.GetBytes(expectedSigPayload))).ToLowerInvariant();
+            }
+            if (!string.IsNullOrWhiteSpace(expectedSig) && string.Equals(expectedSig, signature, StringComparison.OrdinalIgnoreCase))
+            {
+                vm.ApiVerified = true;
+                vm.ApiExpectedHash = expectedSig;
+            }
+        }
+
         return View(vm);
     }
 

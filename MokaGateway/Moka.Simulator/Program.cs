@@ -5,8 +5,8 @@ using Moka.Simulator.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
-// HttpClient for calling Moka.Api or external endpoints
+builder.Services.AddControllersWithViews()
+    .AddRazorRuntimeCompilation();// HttpClient for calling Moka.Api or external endpoints
 builder.Services.AddHttpClient();
 // Bind Moka settings
 builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
@@ -54,6 +54,6 @@ app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=DealerPayment}/{action=Create}/{id?}");
 
 app.Run();

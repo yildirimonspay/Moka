@@ -119,3 +119,100 @@ Error Number:208,State:1,Class:16
 2025-11-10 01:54:53.512 +03:00 [Warning] Microsoft.EntityFrameworkCore.Model.Validation No store type was specified for the decimal property '"Amount"' on entity type '"PaymentEntity"'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values in 'OnModelCreating' using 'HasColumnType', specify precision and scale using 'HasPrecision', or configure a value converter using 'HasConversion'.
 2025-11-10 01:54:54.291 +03:00 [Information]  DB migration completed
 2025-11-10 01:54:54.477 +03:00 [Information]  Moka.Api started
+2025-11-10 17:17:56.376 +03:00 [Information]  DB migration completed
+2025-11-10 17:17:56.615 +03:00 [Information]  Moka.Api started
+2025-11-10 17:29:16.048 +03:00 [Information] Moka.Api.Controllers.PaymentDealer 3D request Amount=100.99 Currency="TL" MaskedCard="540669******1173"
+2025-11-10 17:29:16.502 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 535.2924 ms
+2025-11-10 17:31:06.541 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 401 in 7.3820 ms
+2025-11-10 17:31:06.566 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 401 in 0.5288 ms
+2025-11-10 17:35:39.222 +03:00 [Information]  DB migration completed
+2025-11-10 17:35:39.458 +03:00 [Information]  Moka.Api started
+2025-11-10 17:36:05.425 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="979236******0872"
+2025-11-10 17:36:05.800 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 471.8794 ms
+2025-11-10 17:36:26.702 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="979236******0872"
+2025-11-10 17:36:26.759 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 59.8069 ms
+2025-11-10 17:38:58.320 +03:00 [Information]  DB migration completed
+2025-11-10 17:38:58.532 +03:00 [Information]  Moka.Api started
+2025-11-10 17:41:58.458 +03:00 [Information]  DB migration completed
+2025-11-10 17:41:58.679 +03:00 [Information]  Moka.Api started
+2025-11-10 17:42:08.933 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="517041******7022"
+2025-11-10 17:42:09.419 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 584.3144 ms
+2025-11-10 17:42:10.511 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 401 in 4.4838 ms
+2025-11-10 17:42:10.541 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 401 in 0.4972 ms
+2025-11-10 17:46:16.709 +03:00 [Information]  DB migration completed
+2025-11-10 17:46:16.937 +03:00 [Information]  Moka.Api started
+2025-11-10 17:46:26.087 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="517041******7022"
+2025-11-10 17:46:26.594 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 578.3499 ms
+2025-11-10 17:46:50.278 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 21087.7052 ms
+2025-11-10 17:46:50.341 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 401 in 6.9350 ms
+2025-11-10 17:47:18.594 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 15463.4795 ms
+2025-11-10 17:47:18.627 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 401 in 0.5456 ms
+2025-11-10 17:55:26.408 +03:00 [Information]  DB migration completed
+2025-11-10 17:55:26.633 +03:00 [Information]  Moka.Api started
+2025-11-10 17:55:36.702 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="540669******1173"
+2025-11-10 17:55:37.153 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 523.2543 ms
+2025-11-10 17:55:41.390 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 3179.4449 ms
+2025-11-10 17:55:41.455 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 404 in 0.1223 ms
+2025-11-10 17:55:55.707 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 9420.9936 ms
+2025-11-10 17:59:11.687 +03:00 [Information]  DB migration completed
+2025-11-10 17:59:11.879 +03:00 [Information]  Moka.Api started
+2025-11-10 17:59:27.283 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="517041******7022"
+2025-11-10 17:59:27.730 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 515.6642 ms
+2025-11-10 17:59:37.790 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 2279.2621 ms
+2025-11-10 18:00:02.903 +03:00 [Warning] Moka.Api.Controllers.PaymentDealerContoller Failed to POST OTP failure back to merchant
+System.Net.Http.HttpRequestException: No connection could be made because the target machine actively refused it. (localhost:5283)
+ ---> System.Net.Sockets.SocketException (10061): No connection could be made because the target machine actively refused it.
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+   at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.AddHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.HttpConnectionWaiter`1.WaitForConnectionWithTelemetryAsync(HttpRequestMessage request, HttpConnectionPool pool, Boolean async, CancellationToken requestCancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at Moka.Api.Controllers.PaymentDealerContoller.SendMerchantFailureAsync(PaymentEntity entity, String message) in D:\Projects\Other\Moka\MokaGateway\Moka.Api\Controllers\PaymentDealerContoller.cs:line 323
+2025-11-10 18:00:02.910 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 19001.2781 ms
+2025-11-10 18:00:20.126 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="517040******3637"
+2025-11-10 18:00:20.150 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 25.7987 ms
+2025-11-10 18:00:27.791 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 1298.3784 ms
+2025-11-10 18:01:29.993 +03:00 [Information]  DB migration completed
+2025-11-10 18:01:30.204 +03:00 [Information]  Moka.Api started
+2025-11-10 18:01:58.143 +03:00 [Information]  DB migration completed
+2025-11-10 18:01:58.340 +03:00 [Information]  Moka.Api started
+2025-11-10 18:05:37.470 +03:00 [Information]  DB migration completed
+2025-11-10 18:05:37.665 +03:00 [Information]  Moka.Api started
+2025-11-10 18:05:48.206 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="540669******1173"
+2025-11-10 18:05:48.822 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 706.4789 ms
+2025-11-10 18:05:55.477 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 3372.0189 ms
+2025-11-10 18:06:14.785 +03:00 [Warning] Moka.Api.Controllers.PaymentDealerContoller Failed to POST OTP failure back to merchant
+System.Net.Http.HttpRequestException: No connection could be made because the target machine actively refused it. (localhost:5283)
+ ---> System.Net.Sockets.SocketException (10061): No connection could be made because the target machine actively refused it.
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.System.Threading.Tasks.Sources.IValueTaskSource.GetResult(Int16 token)
+   at System.Net.Sockets.Socket.<ConnectAsync>g__WaitForConnectWithCancellation|285_0(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.AddHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.HttpConnectionWaiter`1.WaitForConnectionWithTelemetryAsync(HttpRequestMessage request, HttpConnectionPool pool, Boolean async, CancellationToken requestCancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.DiagnosticsHandler.SendAsyncCore(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at Moka.Api.Controllers.PaymentDealerContoller.SendMerchantFailureAsync(PaymentEntity entity, String message) in D:\Projects\Other\Moka\MokaGateway\Moka.Api\Controllers\PaymentDealerContoller.cs:line 323
+2025-11-10 18:06:14.791 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 14300.9281 ms
+2025-11-10 18:07:36.513 +03:00 [Information]  DB migration completed
+2025-11-10 18:07:36.740 +03:00 [Information]  Moka.Api started
+2025-11-10 18:07:53.189 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="540669******1173"
+2025-11-10 18:07:53.742 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 9580.5853 ms
+2025-11-10 18:07:54.056 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 112.9555 ms

@@ -1,0 +1,10 @@
+2025-11-11 10:57:57.295 +03:00 [Information]  DB migration completed
+2025-11-11 10:57:57.481 +03:00 [Information]  Moka.Api started
+2025-11-11 11:03:00.786 +03:00 [Information]  DB migration completed
+2025-11-11 11:03:01.019 +03:00 [Information]  Moka.Api started
+2025-11-11 11:36:24.008 +03:00 [Information]  DB migration completed
+2025-11-11 11:36:24.269 +03:00 [Information]  Moka.Api started
+2025-11-11 11:44:43.954 +03:00 [Information]  DB migration completed
+2025-11-11 11:44:44.179 +03:00 [Information]  Moka.Api started
+2025-11-11 11:47:48.251 +03:00 [Information]  DB migration completed
+2025-11-11 11:47:48.439 +03:00 [Information]  Moka.Api started

@@ -1,29 +1,52 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
-using Microsoft.Extensions.Options;
-using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Filters;
-using System.Text;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Moka.Api.Controllers;
 
 [ApiController]
 [Route("PaymentDealer")] // spec base route
-public class MokaController : ControllerBase
+public class PaymentDealerContoller : ControllerBase
 {
-    private readonly ILogger<MokaController> _logger;
+    private readonly ILogger<PaymentDealerContoller> _logger;
     private readonly MokaSettings _settings;
     private readonly Data.MokaDbContext _db;
 
-    public MokaController(ILogger<MokaController> logger, IOptions<MokaSettings> settings, Data.MokaDbContext db)
+    public PaymentDealerContoller(ILogger<PaymentDealerContoller> logger, IOptions<MokaSettings> settings, Data.MokaDbContext db)
     {
         _logger = logger;
         _settings = settings.Value;
         _db = db;
+    }
+
+    // helper: return an HTML page that auto-posts given fields to target url
+    public static ContentResult ToUrlAutoPost(string url, IDictionary<string,string> fields)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            throw new ArgumentException("Invalid url");
+        var sb = new StringBuilder(1024);
+        sb.AppendLine("<!doctype html>");
+        sb.AppendLine("<html lang=\"en\"><head>");
+        sb.AppendLine("<meta charset=\"utf-8\"/>");
+        sb.AppendLine("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self' 'unsafe-inline' data:;\">");
+        sb.AppendLine("</head><body>");
+        sb.AppendLine($"<form id=\"f\" method=\"post\" action=\"{System.Net.WebUtility.HtmlEncode(url)}\">");
+        foreach (var kv in fields)
+        {
+            var name = System.Net.WebUtility.HtmlEncode(kv.Key);
+            var value = System.Net.WebUtility.HtmlEncode(kv.Value ?? "");
+            sb.AppendLine($"<input type=\"hidden\" name=\"{name}\" value=\"{value}\" />");
+        }
+        sb.AppendLine("</form>");
+        sb.AppendLine("<script> (function(){ var f=document.getElementById('f'); if(f) { try{ f.submit(); } catch(e){ } }})();</script>");
+        sb.AppendLine("</body></html>");
+        return new ContentResult { Content = sb.ToString(), ContentType = "text/html; charset=utf-8", StatusCode =200 };
     }
 
     [HttpPost("DoDirectPaymentThreeD")]
@@ -277,7 +300,9 @@ public class MokaController : ControllerBase
         {
             entity.Status = "Failed";
             await _db.SaveChangesAsync();
-            return Content("OTP süresi doldu", "text/plain", Encoding.UTF8);
+            // client-side auto POST to merchant error endpoint
+            var dict = BuildReturnFields(entity, success:false, msg:"OTP expired");
+            return ToUrlAutoPost(entity.RedirectUrl, dict);
         }
         bool success = code == "1234";
         if (!success)
@@ -288,9 +313,11 @@ public class MokaController : ControllerBase
             {
                 entity.Status = "Failed";
                 await _db.SaveChangesAsync();
-                return Content("Çok fazla hatalý deneme", "text/plain", Encoding.UTF8);
+                var dictMax = BuildReturnFields(entity, success:false, msg:"Too many invalid attempts");
+                return ToUrlAutoPost(entity.RedirectUrl, dictMax);
             }
-            return Content("Kod hatalý", "text/plain", Encoding.UTF8);
+            var dictFail = BuildReturnFields(entity, success:false, msg:"Invalid OTP");
+            return ToUrlAutoPost(entity.RedirectUrl, dictFail);
         }
         // OTP verified; wait for bank authorization callback
         entity.Status = "OtpVerified";
@@ -298,35 +325,25 @@ public class MokaController : ControllerBase
         return Content($"<html><body><p>OTP doðrulandý. Banka provizyonu bekleniyor...</p><p>threeDTrxCode: {entity.ThreeDTrxCode}</p></body></html>", "text/html", Encoding.UTF8);
     }
 
-    [HttpGet("payments")]
-    public async Task<ActionResult<IEnumerable<object>>> ListPayments()
+    private Dictionary<string,string> BuildReturnFields(Data.PaymentEntity entity, bool success, string msg = "")
     {
-        var list = await _db.Payments
-            .OrderByDescending(r => r.CreatedUtc)
-            .Select(r => new { r.OtherTrxCode, r.TrxCode, r.ThreeDTrxCode, r.Amount, r.Currency, r.Status, r.CreatedUtc })
-            .ToListAsync();
-        return Ok(list);
-    }
-
-    [HttpGet("payments/other/{otherTrxCode}")]
-    public async Task<ActionResult<object>> GetByOther(string otherTrxCode)
-    {
-        var r = await _db.Payments.FirstOrDefaultAsync(p => p.OtherTrxCode == otherTrxCode);
-        return r is null ? NotFound() : Ok(r);
-    }
-
-    [HttpGet("payments/threeD/{threeDTrxCode}")]
-    public async Task<ActionResult<object>> GetByThreeD(string threeDTrxCode)
-    {
-        var r = await _db.Payments.FirstOrDefaultAsync(p => p.ThreeDTrxCode == threeDTrxCode);
-        return r is null ? NotFound() : Ok(r);
-    }
-
-    [HttpGet("payments/trx/{trxCode}")]
-    public async Task<ActionResult<object>> GetByTrx(string trxCode)
-    {
-        var r = await _db.Payments.FirstOrDefaultAsync(p => p.TrxCode == trxCode);
-        return r is null ? NotFound() : Ok(r);
+        string suffix = success ? "T" : "F";
+        using SHA256 sha = SHA256.Create();
+        string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
+        var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode={(success?"Success":"EX")}&hashValue={hashValue}&nonce={entity.Nonce}";
+        var sig = ComputeHmac(payload, _settings.RedirectHmacSecret);
+        var dict = new Dictionary<string,string>
+        {
+            {"hashValue", hashValue},
+            {"resultCode", success?"Success":"EX"},
+            {"resultMessage", msg},
+            {"trxCode", entity.TrxCode},
+            {"OtherTrxCode", entity.OtherTrxCode},
+            {"nonce", entity.Nonce}
+        };
+        if (success && !string.IsNullOrWhiteSpace(entity.AuthorizationCode)) dict.Add("authorizationCode", entity.AuthorizationCode);
+        if (!string.IsNullOrWhiteSpace(sig)) dict.Add("signature", sig);
+        return dict;
     }
 
     [HttpPost("BankAuthorizationCallback")] // simulated bank -> united
@@ -440,15 +457,6 @@ public class MokaController : ControllerBase
             }
         }
         return Ok(new { ok = true, paid = success });
-    }
-
-    private static bool IsRedirectAllowed(string url, string[]? whitelist)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return false;
-        if (whitelist == null || whitelist.Length ==0) return true; // opt-in
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
-        var host = u.Host.ToLowerInvariant();
-        return whitelist.Any(w => host == w.ToLowerInvariant() || host.EndsWith("." + w.ToLowerInvariant()));
     }
 
     private static string ComputeHmac(string data, string? secret)

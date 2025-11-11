@@ -1,0 +1,27 @@
+@model Moka.Simulator.Models.DealerPaymentInputModel
+@{
+ Layout = null;
+ var target = Model.PostUrl ?? Url.Action("Callback", "DealerPayment")!;
+ var trx = Model.Trx;
+ var hash = Model.Hash; // may be empty on API-side validation errors
+ var resultCode = ViewBag.ResultCode as string ?? "EX";
+ var resultMessage = ViewBag.ResultMessage as string ?? "Gateway validation error";
+}
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset="utf-8" />
+ <title>Posting result...</title>
+</head>
+<body onload="document.forms[0].submit()">
+ <form method="post" action="@target">
+ <input type="hidden" name="trx" value="@trx" />
+ <input type="hidden" name="hash" value="@hash" />
+ <input type="hidden" name="resultCode" value="@resultCode" />
+ <input type="hidden" name="resultMessage" value="@resultMessage" />
+ <noscript>
+ <button type="submit">Devam</button>
+ </noscript>
+ </form>
+</body>
+</html>

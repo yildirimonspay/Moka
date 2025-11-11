@@ -3,11 +3,11 @@
  ViewData["Title"] = "Dealer Payment";
  var cards = Model.TestCards ?? new List<Moka.Simulator.Models.TestCard>();
 }
-<h2>Dealer Payment</h2>
-<div class="alert alert-info">
- Sadece kart ve tutar bilgilerini giriniz. Diðer alanlar sunucu tarafýndan doldurulur.
-</div>
-<form asp-action="Create" method="post">
+
+<form asp-action="Create" method="post" novalidate>
+ <div class="mb-3">
+ <div asp-validation-summary="All" class="alert alert-danger" role="alert" style="display:@(ViewData.ModelState.ErrorCount>0?"block":"none")"></div>
+ </div>
  <div class="row">
  <div class="col-md-8">
  <h4>Kart Bilgileri</h4>
@@ -59,6 +59,24 @@
  <input asp-for="InstallmentNumber" class="form-control" />
  <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
  </div>
+ @* Backend result info (if any) *@
+ @if (ViewData.ModelState.ErrorCount >0)
+ {
+ <div class="card border-danger mb-3">
+ <div class="card-header">Sunucu Hatalarý</div>
+ <div class="card-body p-2">
+ <ul class="mb-0 small">
+ @foreach (var entry in ViewData.ModelState.Where(ms => ms.Value!.Errors.Count >0))
+ {
+ foreach (var err in entry.Value!.Errors)
+ {
+ <li>@err.ErrorMessage</li>
+ }
+ }
+ </ul>
+ </div>
+ </div>
+ }
  </div>
  </div>
  <button type="submit" class="btn btn-primary">Ödemeyi Gönder</button>
@@ -83,6 +101,10 @@
  expYear && (expYear.value = opt.dataset.expYear);
  cvc && (cvc.value = opt.dataset.cvc);
  });
+ // Scroll to errors if any
+ if (document.querySelector('.alert.alert-danger')) {
+ window.scrollTo({top:0, behavior:'smooth'});
+ }
  })();
  </script>
 }
