@@ -1,13 +1,51 @@
+﻿using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Moka.Simulator.Data;
 using Moka.Simulator.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Kestrel hardening
+builder.WebHost.ConfigureKestrel(opt =>
+{
+    opt.AddServerHeader = false;
+    opt.Limits.MaxRequestBodySize = 1 * 1024 * 1024; //1 MB
+    opt.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(30);
+    opt.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(15);
+});
+
 // Add services to the container.
-builder.Services.AddControllersWithViews()
+builder.Services.AddControllersWithViews(options =>
+{
+        options.MaxModelBindingCollectionSize = 64;
+    })
     .AddRazorRuntimeCompilation();// HttpClient for calling Moka.Api or external endpoints
 builder.Services.AddHttpClient();
+// Forwarded headers (behind proxy)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
+// Rate limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.AddPolicy("gateway", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+        {
+            TokenLimit = 20,
+            TokensPerPeriod = 20,
+            ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+            AutoReplenishment = true,
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+        });
+    });
+});
 // Bind Moka settings
 builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
 // Compression
@@ -44,10 +82,21 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseResponseCompression();
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.UseRateLimiter();
+
+// Basic security headers
+app.Use(async (ctx, next) =>
+{
+    await next();
+    ctx.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    ctx.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+    ctx.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+});
 
 app.UseAuthorization();
 

@@ -1,4 +1,4 @@
-namespace Moka.Contracts.Settings;
+﻿namespace Moka.Contracts.Settings;
 
 public class MokaSettings
 {
@@ -29,4 +29,5 @@ public class MokaSettings
  // RedirectUrl security
  public string[]? RedirectDomainWhitelist { get; set; }
  public string? RedirectHmacSecret { get; set; }
+ public Dictionary<string,string[]>? RedirectDomainsPerDealer { get; set; } // dealerCode -> allowed domains
 }

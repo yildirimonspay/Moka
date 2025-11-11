@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace Moka.Simulator.Data;
 
@@ -51,5 +51,7 @@ public class PaymentSession
     public string MaskedCard { get; set; } = string.Empty;
     public string? TrxCode { get; set; }
     public string? MerchantNonce { get; set; }
+    public bool NonceUsed { get; set; } // prevent replay
+    public DateTime? NonceUsedUtc { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }

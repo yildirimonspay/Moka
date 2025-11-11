@@ -1,6 +1,10 @@
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Swashbuckle.AspNetCore.Filters;
+using Moka.Api.Settings;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,8 +26,28 @@ builder.Services.AddDbContext<Moka.Api.Data.MokaDbContext>(opt =>
 
 // Bind settings
 builder.Services.Configure<Moka.Contracts.Settings.MokaSettings>(builder.Configuration.GetSection("Moka"));
+builder.Services.AddSingleton<IValidateOptions<Moka.Contracts.Settings.MokaSettings>, MokaSettingsValidator>();
 
 builder.Services.AddControllers();
+// Rate limiting for critical endpoints
+builder.Services.AddRateLimiter(options =>
+{
+ options.RejectionStatusCode =429;
+ options.AddPolicy("gateway", httpContext =>
+ {
+ var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+ return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+ {
+ TokenLimit =30,
+ TokensPerPeriod =30,
+ ReplenishmentPeriod = TimeSpan.FromSeconds(10),
+ AutoReplenishment = true,
+ QueueLimit =0,
+ QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+ });
+ });
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -46,6 +70,9 @@ builder.Services.AddSwaggerExamplesFromAssemblyOf<Moka.Api.Swagger.DealerPayment
 
 // Health checks
 builder.Services.AddHealthChecks();
+
+// Add HttpClientFactory
+builder.Services.AddHttpClient("merchant-callback").SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 var app = builder.Build();
 
@@ -82,9 +109,20 @@ app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();
 // Global API Key auth
 app.UseMiddleware<Moka.Api.Middleware.ApiKeyMiddleware>();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllers();
+
+// Security headers middleware
+app.Use(async (ctx, next) =>
+{
+ await next();
+ ctx.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+ ctx.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+ ctx.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+ ctx.Response.Headers.TryAdd("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+});
 
 Log.Information("Moka.Api started");
 

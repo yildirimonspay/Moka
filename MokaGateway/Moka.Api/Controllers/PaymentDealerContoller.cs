@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Moka.Contracts.Constants;
 using Moka.Contracts.Helper;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
 using Swashbuckle.AspNetCore.Filters;
 using System.ComponentModel.DataAnnotations;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Moka.Api.Controllers;
 
@@ -18,15 +21,18 @@ public class PaymentDealerContoller : ControllerBase
     private readonly ILogger<PaymentDealerContoller> _logger;
     private readonly MokaSettings _settings;
     private readonly Data.MokaDbContext _db;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public PaymentDealerContoller(ILogger<PaymentDealerContoller> logger, IOptions<MokaSettings> settings, Data.MokaDbContext db)
+    public PaymentDealerContoller(ILogger<PaymentDealerContoller> logger, IOptions<MokaSettings> settings, Data.MokaDbContext db, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _settings = settings.Value;
         _db = db;
+        _httpClientFactory = httpClientFactory;
     }
 
-    [HttpPost("DoDirectPaymentThreeD")]
+    [EnableRateLimiting("gateway")]
+    [HttpPost("DoDirectPaymentThreeD")] // attach rate limiter to critical endpoint
     [SwaggerRequestExample(typeof(DealerPaymentServicePaymentRequest), typeof(Moka.Api.Swagger.DealerPaymentExample))]
     public async Task<ActionResult<DealerPaymentServicePaymentResult>> Pay([FromBody] DealerPaymentServicePaymentRequest request)
     {
@@ -106,7 +112,8 @@ public class PaymentDealerContoller : ControllerBase
         }
         catch (Exception ex)
         {
-            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "EX", ResultMessage = ex.Message, Exception = ex.ToString(), Data = null });
+            _logger.LogError(ex, "Validation phase failed");
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "EX", ResultMessage = "Internal error", Data = null });
         }
 
         // IP whitelist (optional)
@@ -252,59 +259,73 @@ public class PaymentDealerContoller : ControllerBase
             }
         }
 
-        // generate nonce and append to redirect url
+        // enforce RedirectUrl allowlist and https (refactored)
+        string? redirectCandidate = request.PaymentDealerRequest.RedirectUrl ?? _settings.RedirectUrl;
+        if (!TryValidateRedirect(redirectCandidate, _settings.RedirectDomainWhitelist, _settings.RedirectDomainsPerDealer, request.PaymentDealerAuthentication?.DealerCode, out var redirectError))
+        {
+            return Ok(R(redirectError!));
+        }
+        // generate OTP per transaction
+        string otp = Random.Shared.Next(1000,9999).ToString();
+        string otpHash;
+        using (var shaOtp = SHA256.Create())
+        {
+            otpHash = Convert.ToHexString(shaOtp.ComputeHash(Encoding.UTF8.GetBytes(otp))).ToLowerInvariant();
+        }
+        // generate transaction identifiers and redirect plumbing (previously removed)
         string otherTrx = request.PaymentDealerRequest.OtherTrxCode ?? Guid.NewGuid().ToString("N");
         string codeForHash = Guid.NewGuid().ToString().ToUpperInvariant();
         string nonce = Guid.NewGuid().ToString("N");
         string redirectUrl = request.PaymentDealerRequest.RedirectUrl ?? _settings.RedirectUrl ?? "https://example.com/return";
-        if (!redirectUrl.Contains("?")) redirectUrl += "?nonce=" + Uri.EscapeDataString(nonce);
-        else redirectUrl += "&nonce=" + Uri.EscapeDataString(nonce);
-        // Realistic trxCode: numeric auth-like placeholder
-        string trxCode = Random.Shared.NextInt64(100000000000, 999999999999).ToString();
+        if (!redirectUrl.Contains("?")) redirectUrl += "?nonce=" + Uri.EscapeDataString(nonce); else redirectUrl += "&nonce=" + Uri.EscapeDataString(nonce);
+        string trxCode = Random.Shared.NextInt64(100000000000,999999999999).ToString();
         string threeDTrxCode = Guid.NewGuid().ToString("N");
-
         string cardBinForEntity = new string((request.PaymentDealerRequest.CardNumber ?? string.Empty).Where(char.IsDigit).ToArray());
-        cardBinForEntity = cardBinForEntity.Length >= 6 ? cardBinForEntity.Substring(0, 6) : cardBinForEntity;
-        // generate authorization code placeholder (will be final after bank callback)
-        string provisionalAuthCode = string.Empty; // empty until bank authorization
+        cardBinForEntity = cardBinForEntity.Length >=6 ? cardBinForEntity.Substring(0,6) : cardBinForEntity;
+        string provisionalAuthCode = string.Empty;
         DateTime otpExpiry = DateTime.UtcNow.AddMinutes(5);
 
-        // VirtualPosNotAvailable scenario example: BIN allowed but installment > dealer MaxInstallmentPerVirtualPos
-        if (_settings.AllowedBins != null && _settings.AllowedBins.Any(b => cardBinForEntity.StartsWith(b)) && request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallmentPerVirtualPos)
+        // create payment entity
+        try
         {
-            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.VirtualPosNotAvailable", ResultMessage = "POS not available for selected installment", Data = null });
+            var entity = new Data.PaymentEntity
+            {
+                OtherTrxCode = otherTrx,
+                TrxCode = trxCode,
+                CodeForHash = codeForHash,
+                ThreeDTrxCode = threeDTrxCode,
+                RedirectUrl = redirectUrl,
+                Nonce = nonce,
+                Amount = request.PaymentDealerRequest.Amount,
+                Currency = request.PaymentDealerRequest.Currency ?? "TL",
+                Status = "Pending3D",
+                CardBin = cardBinForEntity,
+                AuthorizationCode = provisionalAuthCode,
+                OtpExpiresUtc = otpExpiry,
+                OtpFailCount =0,
+                OtpMaxAttempts =3,
+                CreatedUtc = DateTime.UtcNow,
+                OtpHash = otpHash,
+                OtpPlainTest = _settings.Mode?.Equals("Test", StringComparison.OrdinalIgnoreCase) == true ? otp : null,
+            };
+            _db.Payments.Add(entity);
+            await _db.SaveChangesAsync();
+
+            // Commission enrichment (simple demo): if installment>1 and commission provided add warning if rate <1%
+            if (request.PaymentDealerRequest.InstallmentNumber > 1 && request.PaymentDealerRequest.CommissionRate.HasValue && request.PaymentDealerRequest.CommissionRate.Value < 0.01m)
+            {
+                return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerCommissionRateNotFound", ResultMessage = "Commission rate too low", Data = null });
+            }
+
+            string baseUrl = $"{Request.Scheme}://{Request.Host}";
+            string threeDUrl = $"{baseUrl}/PaymentDealer/PaymentDealerThreeDProcess?threeDTrxCode={Uri.EscapeDataString(threeDTrxCode)}";
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "Success", Data = new MokaData { Url = threeDUrl, CodeForHash = codeForHash } });
         }
-
-        var entity = new Data.PaymentEntity
+        catch (Exception ex)
         {
-            OtherTrxCode = otherTrx,
-            TrxCode = trxCode,
-            CodeForHash = codeForHash,
-            ThreeDTrxCode = threeDTrxCode,
-            RedirectUrl = redirectUrl,
-            Nonce = nonce,
-            Amount = request.PaymentDealerRequest.Amount,
-            Currency = request.PaymentDealerRequest.Currency ?? "TL",
-            Status = "Pending3D",
-            CardBin = cardBinForEntity,
-            AuthorizationCode = provisionalAuthCode,
-            OtpExpiresUtc = otpExpiry,
-            OtpFailCount = 0,
-            OtpMaxAttempts = 3,
-            CreatedUtc = DateTime.UtcNow
-        };
-        _db.Payments.Add(entity);
-        await _db.SaveChangesAsync();
-
-        // Commission enrichment (simple demo): if installment>1 and commission provided add warning if rate <1%
-        if (request.PaymentDealerRequest.InstallmentNumber > 1 && request.PaymentDealerRequest.CommissionRate.HasValue && request.PaymentDealerRequest.CommissionRate.Value < 0.01m)
-        {
-            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerCommissionRateNotFound", ResultMessage = "Commission rate too low", Data = null });
+            _logger.LogError(ex, "Pay failed");
+            return Ok(new DealerPaymentServicePaymentResult { ResultCode = "EX", ResultMessage = "Internal error", Data = null });
         }
-
-        string baseUrl = $"{Request.Scheme}://{Request.Host}";
-        string threeDUrl = $"{baseUrl}/PaymentDealer/PaymentDealerThreeDProcess?threeDTrxCode={Uri.EscapeDataString(threeDTrxCode)}";
-        return Ok(new DealerPaymentServicePaymentResult { ResultCode = "Success", Data = new MokaData { Url = threeDUrl, CodeForHash = codeForHash } });
     }
 
     [HttpGet("PaymentDealerThreeDProcess")]
@@ -324,6 +345,12 @@ public class PaymentDealerContoller : ControllerBase
         var expiresIn = entity.OtpExpiresUtc.HasValue ? (int)(entity.OtpExpiresUtc.Value - DateTime.UtcNow).TotalSeconds : 0;
         sb.Append($"<p>Kalan deneme: {remaining}, Süre(sn): {expiresIn}</p>");
         sb.Append("</body></html>");
+
+        // In ThreeD GET add cache-control headers
+        Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
         return Content(sb.ToString(), "text/html", Encoding.UTF8);
     }
 
@@ -341,7 +368,19 @@ public class PaymentDealerContoller : ControllerBase
             var dict = BuildReturnFields(entity, success: false, msg: "OTP expired");
             return RemotePostUtil.ToUrlAutoPost(entity.RedirectUrl, dict);
         }
-        bool success = code == "1234";
+        bool success = false; // replaced previous inline success calc
+        {
+            // verify OTP using constant-time hash compare
+            string providedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code))).ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(entity.OtpHash))
+            {
+                try
+                {
+                    success = CryptographicOperations.FixedTimeEquals(Convert.FromHexString(entity.OtpHash), Convert.FromHexString(providedHash));
+                }
+                catch { success = false; }
+            }
+        }
         if (!success)
         {
             entity.OtpFailCount++;
@@ -362,28 +401,8 @@ public class PaymentDealerContoller : ControllerBase
         return Content($"<html><body><p>OTP doðrulandý. Banka provizyonu bekleniyor...</p><p>threeDTrxCode: {entity.ThreeDTrxCode}</p></body></html>", "text/html", Encoding.UTF8);
     }
 
-    private Dictionary<string, string> BuildReturnFields(Data.PaymentEntity entity, bool success, string msg = "")
-    {
-        string suffix = success ? "T" : "F";
-        using SHA256 sha = SHA256.Create();
-        string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
-        var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode={(success ? "Success" : "EX")}&hashValue={hashValue}&nonce={entity.Nonce}";
-        var sig = ComputeHmac(payload, _settings.RedirectHmacSecret);
-        var dict = new Dictionary<string, string>
-        {
-            {"hashValue", hashValue},
-            {"resultCode", success?"Success":"EX"},
-            {"resultMessage", msg},
-            {"trxCode", entity.TrxCode},
-            {"OtherTrxCode", entity.OtherTrxCode},
-            {"nonce", entity.Nonce}
-        };
-        if (success && !string.IsNullOrWhiteSpace(entity.AuthorizationCode)) dict.Add("authorizationCode", entity.AuthorizationCode);
-        if (!string.IsNullOrWhiteSpace(sig)) dict.Add("signature", sig);
-        return dict;
-    }
-
-    [HttpPost("BankAuthorizationCallback")] // simulated bank -> united
+    [EnableRateLimiting("gateway")]
+    [HttpPost("BankAuthorizationCallback")]
     public async Task<ActionResult<object>> BankAuthorizationCallback([FromForm] string threeDTrxCode, [FromForm] string authResult)
     {
         var entity = await _db.Payments.FirstOrDefaultAsync(p => p.ThreeDTrxCode == threeDTrxCode);
@@ -393,7 +412,7 @@ public class PaymentDealerContoller : ControllerBase
         {
             // compute success hash and post to merchant
             if (string.IsNullOrWhiteSpace(entity.AuthorizationCode))
-                entity.AuthorizationCode = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant();
+                entity.AuthorizationCode = Guid.NewGuid().ToString("N").Substring(0,12).ToUpperInvariant();
             string suffix = "T";
             using SHA256 sha = SHA256.Create();
             string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
@@ -401,8 +420,13 @@ public class PaymentDealerContoller : ControllerBase
             await _db.SaveChangesAsync();
             try
             {
-                using var http = new HttpClient();
-                var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode=Success&hashValue={hashValue}&nonce={entity.Nonce}";
+                var http = _httpClientFactory.CreateClient("merchant-callback");
+                http.Timeout = TimeSpan.FromSeconds(10);
+                string ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                string jti = Guid.NewGuid().ToString("N");
+                entity.AuthorizationCallbackJti = jti;
+                await _db.SaveChangesAsync();
+                var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode=Success&hashValue={hashValue}&nonce={entity.Nonce}&ts={ts}&jti={jti}";
                 var sig = ComputeHmac(payload, _settings.RedirectHmacSecret);
                 var dict = new Dictionary<string, string>
                 {
@@ -413,6 +437,8 @@ public class PaymentDealerContoller : ControllerBase
                     {"OtherTrxCode", entity.OtherTrxCode},
                     {"nonce", entity.Nonce},
                     {"authorizationCode", entity.AuthorizationCode},
+                    {"ts", ts},
+                    {"jti", jti},
                     {"signature", sig}
                 };
                 var resp = await http.PostAsync(entity.RedirectUrl, new FormUrlEncodedContent(dict));
@@ -453,8 +479,13 @@ public class PaymentDealerContoller : ControllerBase
             await _db.SaveChangesAsync();
             try
             {
-                using var http = new HttpClient();
-                var payloadF = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode=EX&hashValue={hashValue}&nonce={entity.Nonce}";
+                var http = _httpClientFactory.CreateClient("merchant-callback");
+                http.Timeout = TimeSpan.FromSeconds(10);
+                string ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                string jti = Guid.NewGuid().ToString("N");
+                entity.AuthorizationCallbackJti = jti;
+                await _db.SaveChangesAsync();
+                var payloadF = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode=EX&hashValue={hashValue}&nonce={entity.Nonce}&ts={ts}&jti={jti}";
                 var sigF = ComputeHmac(payloadF, _settings.RedirectHmacSecret);
                 var fdict = new Dictionary<string, string>
                 {
@@ -464,6 +495,8 @@ public class PaymentDealerContoller : ControllerBase
                     {"trxCode", entity.TrxCode},
                     {"OtherTrxCode", entity.OtherTrxCode},
                     {"nonce", entity.Nonce},
+                    {"ts", ts},
+                    {"jti", jti},
                     {"signature", sigF}
                 };
                 var fResp = await http.PostAsync(entity.RedirectUrl, new FormUrlEncodedContent(fdict));
@@ -496,10 +529,54 @@ public class PaymentDealerContoller : ControllerBase
         return Ok(new { ok = true, paid = success });
     }
 
+    // replace hardcoded codes where simple mapping is possible
+    private DealerPaymentServicePaymentResult R(string code, string? msg = null) => new DealerPaymentServicePaymentResult { ResultCode = code, ResultMessage = msg, Data = null };
+
+    // In BuildReturnFields and merchant callback, use SignatureUtil to compute canonical payload
+    private Dictionary<string, string> BuildReturnFields(Data.PaymentEntity entity, bool success, string msg = "")
+    {
+        string suffix = success ? "T" : "F";
+        using SHA256 sha = SHA256.Create();
+        string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
+        var map = new Dictionary<string,string?>
+        {
+        ["hashValue"] = hashValue,
+        ["nonce"] = entity.Nonce,
+        ["OtherTrxCode"] = entity.OtherTrxCode,
+        ["resultCode"] = success?"Success":"EX",
+        ["trxCode"] = entity.TrxCode
+        };
+        var payload = SignatureUtil.BuildCanonical(map);
+        var sig = SignatureUtil.ComputeHmacHex(payload, _settings.RedirectHmacSecret);
+        var dict = new Dictionary<string, string>
+        {
+        {"hashValue", hashValue},
+        {"resultCode", success?"Success":"EX"},
+        {"resultMessage", msg},
+        {"trxCode", entity.TrxCode},
+        {"OtherTrxCode", entity.OtherTrxCode},
+        {"nonce", entity.Nonce}
+        };
+        if (success && !string.IsNullOrWhiteSpace(entity.AuthorizationCode)) dict.Add("authorizationCode", entity.AuthorizationCode);
+        if (!string.IsNullOrWhiteSpace(sig)) dict.Add("signature", sig);
+        return dict;
+    }
+
     private static string ComputeHmac(string data, string? secret)
     {
         if (string.IsNullOrEmpty(secret)) return string.Empty;
         using var h = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         return Convert.ToHexString(h.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLowerInvariant();
+    }
+
+    private static bool TryValidateRedirect(string? url, string[]? whitelist, Dictionary<string,string[]>? perDealer, string? dealerCode, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(url)) { error = "PaymentDealer.DoDirectPayment3dRequest.RedirectUrlRequired"; return false; }
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) { error = "PaymentDealer.DoDirectPayment3dRequest.InvalidRedirectUrl"; return false; }
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) { error = "PaymentDealer.DoDirectPayment3dRequest.RedirectUrlMustBeHttps"; return false; }
+        var domains = (perDealer != null && dealerCode != null && perDealer.TryGetValue(dealerCode, out var list)) ? list : whitelist;
+        if (domains != null && !domains.Contains(uri.Host, StringComparer.OrdinalIgnoreCase)) { error = "PaymentDealer.DoDirectPayment3dRequest.InvalidRedirectUrlDomain"; return false; }
+        return true;
     }
 }

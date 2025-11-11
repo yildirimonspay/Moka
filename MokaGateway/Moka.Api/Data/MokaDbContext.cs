@@ -24,6 +24,9 @@ public class MokaDbContext : DbContext
             e.Property(x => x.CardBin).HasMaxLength(8);
             e.Property(x => x.Currency).IsRequired().HasMaxLength(8);
             e.Property(x => x.Status).IsRequired().HasMaxLength(32);
+            e.Property(x => x.OtpHash).HasMaxLength(128);
+            e.Property(x => x.OtpPlainTest).HasMaxLength(16);
+            e.Property(x => x.AuthorizationCallbackJti).HasMaxLength(64);
 
             // numeric/date
             e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
@@ -53,8 +56,11 @@ public class PaymentEntity
     public int OtpFailCount { get; set; } =0;
     public int OtpMaxAttempts { get; set; } =3;
     public DateTime? OtpExpiresUtc { get; set; } = null;
+    public string OtpHash { get; set; } = string.Empty; // hashed OTP
+    public string? OtpPlainTest { get; set; } // optional: only for test mode display
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "TL";
     public string Status { get; set; } = "Pending3D";
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    public string? AuthorizationCallbackJti { get; set; } // replay protection for merchant callback
 }

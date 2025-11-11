@@ -1,4 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
+ï»¿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
@@ -66,7 +67,7 @@ public class DealerPaymentController : Controller
         string? redirectUrl = _settings.RedirectUrl ?? _config["Moka:RedirectUrl"];
         if (string.IsNullOrWhiteSpace(postUrl))
         {
-            ModelState.AddModelError(string.Empty, "PostUrl yapýlandýrýlmadý.");
+            ModelState.AddModelError(string.Empty, "PostUrl yapÄ±landÄ±rÄ±lmadÄ±.");
             PopulateLists(model);
             model.TestCards = _testData.GetTestCards();
             return View(model);
@@ -76,6 +77,10 @@ public class DealerPaymentController : Controller
         string otherTrxCode = Guid.NewGuid().ToString("N");
         string cardNumber = (model.CardNumber ?? string.Empty).Replace(" ", string.Empty);
         string clientIp = mode.Equals("Test", StringComparison.OrdinalIgnoreCase) ? "127.0.0.1" : HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
+
+        // Generate merchant-side nonce and include in RedirectUrl as mnonce query param (server will preserve it)
+        string merchantNonce = Guid.NewGuid().ToString("N");
+        string? redirectUrlWithNonce = AppendQueryParam(redirectUrl, "mnonce", merchantNonce);
 
         DealerPaymentServicePaymentRequest request = new DealerPaymentServicePaymentRequest
         {
@@ -98,7 +103,7 @@ public class DealerPaymentController : Controller
                 InstallmentNumber = model.InstallmentNumber <= 0 ? 1 : model.InstallmentNumber,
                 OtherTrxCode = otherTrxCode,
                 ClientIP = clientIp,
-                RedirectUrl = redirectUrl,
+                RedirectUrl = redirectUrlWithNonce,
                 ReturnHash = 1
             }
         };
@@ -112,18 +117,35 @@ public class DealerPaymentController : Controller
             if (postUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase))
                 msg.Headers.Add("X-API-KEY", _config["ApiKeys:Primary"] ?? "dev-key");
             
-            var requestJsonForLog = JsonSerializer.Serialize(request, jsonOptions);
-            if (!string.IsNullOrWhiteSpace(cardNumber))
+            // Sanitize request body and headers for logging
+            var sanitizedRequest = new DealerPaymentServicePaymentRequest
             {
-                var masked = MaskCard(cardNumber);
-                requestJsonForLog = requestJsonForLog.Replace(cardNumber, masked);
-            }
+                PaymentDealerAuthentication = request.PaymentDealerAuthentication, // no secret here beyond password which isn't logged
+                PaymentDealerRequest = new PaymentDealerRequest
+                {
+                    CardHolderFullName = request.PaymentDealerRequest.CardHolderFullName,
+                    CardNumber = MaskCard(cardNumber),
+                    ExpMonth = request.PaymentDealerRequest.ExpMonth,
+                    ExpYear = request.PaymentDealerRequest.ExpYear,
+                    CvcNumber = null, // never log CVC
+                    Amount = request.PaymentDealerRequest.Amount,
+                    Currency = request.PaymentDealerRequest.Currency,
+                    InstallmentNumber = request.PaymentDealerRequest.InstallmentNumber,
+                    OtherTrxCode = request.PaymentDealerRequest.OtherTrxCode,
+                    ClientIP = request.PaymentDealerRequest.ClientIP,
+                    RedirectUrl = request.PaymentDealerRequest.RedirectUrl,
+                    ReturnHash = request.PaymentDealerRequest.ReturnHash
+                }
+            };
+            var requestJsonForLog = JsonSerializer.Serialize(sanitizedRequest, jsonOptions);
+            var headersForLog = SanitizeHeaders(msg.Headers).ToList();
+
             var httpLog = new Data.HttpLog
             {
                 Direction = "Outbound",
                 Url = postUrl,
                 Method = "POST",
-                RequestHeaders = string.Join("\n", msg.Headers.Select(h => h.Key+":"+string.Join(',',h.Value)) ),
+                RequestHeaders = string.Join("\n", headersForLog.Select(h => h.Key + ":" + string.Join(',', h.Value))),
                 RequestBody = requestJsonForLog
             };
             _db.HttpLogs.Add(httpLog);
@@ -133,7 +155,7 @@ public class DealerPaymentController : Controller
             
             httpLog.Direction = "Outbound"; // keep
             httpLog.StatusCode = (int)response.StatusCode;
-            httpLog.ResponseHeaders = string.Join("\n", response.Headers.Select(h => h.Key+":"+string.Join(',',h.Value)) );
+            httpLog.ResponseHeaders = string.Join("\n", SanitizeHeaders(response.Headers).Select(h => h.Key + ":" + string.Join(',', h.Value)));
             string responseJson = await response.Content.ReadAsStringAsync();
             httpLog.ResponseBody = responseJson;
             await _db.SaveChangesAsync();
@@ -151,9 +173,8 @@ public class DealerPaymentController : Controller
            
             if (string.Equals(result.ResultCode, "Success", StringComparison.OrdinalIgnoreCase) && result.Data?.Url is string url && !string.IsNullOrWhiteSpace(url))
             {
-                // Extract nonce in RedirectUrl from API by following threeD page query? The Data.Url points to3D page; nonce is inside the stored RedirectUrl at API side.
-                // We can't see RedirectUrl here; pass nonce via query? Fallback: capture nonce from Callback query when it comes.
-                _db.PaymentSessions.Add(new Data.PaymentSession { OtherTrxCode = otherTrxCode, CodeForHash = result.Data.CodeForHash ?? string.Empty, Amount = model.Amount, Currency = "TL", MaskedCard = MaskCard(cardNumber) });
+                // Persist session with server-side expected nonce to validate later
+                _db.PaymentSessions.Add(new Data.PaymentSession { OtherTrxCode = otherTrxCode, CodeForHash = result.Data.CodeForHash ?? string.Empty, Amount = model.Amount, Currency = "TL", MaskedCard = MaskCard(cardNumber), MerchantNonce = merchantNonce });
                 await _db.SaveChangesAsync();
                 model.PostUrl = url;
                 model.Trx = otherTrxCode;
@@ -175,12 +196,12 @@ public class DealerPaymentController : Controller
         }
         catch (TaskCanceledException)
         {
-            ModelState.AddModelError(string.Empty, "Ýstek zaman aþýmýna uðradý.");
+            ModelState.AddModelError(string.Empty, "Ä°stek zaman aÅŸÄ±mÄ±na uÄŸradÄ±.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Payment request failed");
-            ModelState.AddModelError(string.Empty, "Beklenmeyen bir hata oluþtu.");
+            ModelState.AddModelError(string.Empty, "Beklenmeyen bir hata oluÅŸtu.");
         }
 
         PopulateLists(model);
@@ -188,30 +209,34 @@ public class DealerPaymentController : Controller
         return View(model);
     }
 
-    [HttpGet, HttpPost]
-    public async Task<IActionResult> Callback(string? trx, string? resultCode = null, string? resultMessage = null, string? hash = null)
+    [EnableRateLimiting("gateway")]
+    [HttpPost]
+    [Consumes("application/x-www-form-urlencoded")]
+    [RequestSizeLimit(16 *1024)]
+    [RequestFormLimits(ValueLengthLimit =2048, ValueCountLimit =64, KeyLengthLimit =256)]
+    public async Task<IActionResult> Callback([FromForm] Moka.Contracts.Payments.CallbackDto dto)
     {
         IFormCollection? form = Request.HasFormContentType ? Request.Form : null;
-        // Inbound HTTP log
+        // Inbound HTTP log (sanitize headers)
         var inboundLog = new Data.HttpLog
         {
             Direction = "Inbound",
             Url = Request.Path + Request.QueryString,
             Method = Request.Method,
-            RequestHeaders = string.Join("\n", Request.Headers.Select(h => h.Key+":"+string.Join(',',h.Value))) ,
+            RequestHeaders = string.Join("\n", SanitizeHeaders(Request.Headers).Select(h => h.Key + ":" + string.Join(',', h.Value))),
             RequestBody = form != null ? string.Join("&", form.Keys.Select(k => $"{k}={form[k].ToString()}")) : string.Empty
         };
         _db.HttpLogs.Add(inboundLog);
         await _db.SaveChangesAsync();
- 
-        string? hashValue = form?["hashValue"].FirstOrDefault();
-        string? trxCode = form?["trxCode"].FirstOrDefault();
-        string? otherTrx = form?["OtherTrxCode"].FirstOrDefault();
-        string? authorizationCode = form?["authorizationCode"].FirstOrDefault();
-        trx ??= otherTrx ?? Request.Query["trx"].FirstOrDefault();
-        hash ??= hashValue ?? Request.Query["hash"].FirstOrDefault();
-        resultCode ??= form?["resultCode"].FirstOrDefault() ?? Request.Query["resultCode"].FirstOrDefault();
-        resultMessage ??= form?["resultMessage"].FirstOrDefault() ?? Request.Query["resultMessage"].FirstOrDefault();
+        
+        string? trx = dto.OtherTrxCode ?? dto.trx;
+        string? hash = dto.hashValue;
+        string? trxCode = dto.trxCode;
+        string? authorizationCode = dto.authorizationCode;
+        string? resultCode = dto.resultCode;
+        string? resultMessage = dto.resultMessage;
+        string? nonce = dto.nonce; // PSP-provided nonce
+        string? merchantNonce = Request.Query["mnonce"].FirstOrDefault(); // merchant-provided expected nonce
 
         Data.PaymentSession? session = null;
         if (!string.IsNullOrWhiteSpace(trx))
@@ -225,26 +250,21 @@ public class DealerPaymentController : Controller
             string suffix = string.Equals(resultCode, "Success", StringComparison.OrdinalIgnoreCase) ? "T" : "F";
             using SHA256 sha = SHA256.Create();
             localExpected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes((session.CodeForHash ?? string.Empty) + suffix))).ToLowerInvariant();
-            verified = string.Equals(localExpected, hash, StringComparison.OrdinalIgnoreCase);
+            // constant-time compare for hash as well
+            verified = SignaturesEqual(localExpected, hash);
         }
 
-        // nonce validation
-        string? nonce = form?["nonce"].FirstOrDefault() ?? Request.Query["nonce"].FirstOrDefault();
-        if (session != null && !string.IsNullOrWhiteSpace(nonce))
-        {
-            session.MerchantNonce = nonce;
-            await _db.SaveChangesAsync();
-        }
-        // include nonce check if we have stored previously
-        bool nonceOk = true;
-        if (session?.MerchantNonce != null && nonce != null)
-            nonceOk = string.Equals(session.MerchantNonce, nonce, StringComparison.Ordinal);
-        verified = verified && nonceOk;
+        // nonce validation: compare only with stored value, never overwrite. Also reject replays.
+        bool nonceOk = !string.IsNullOrEmpty(session?.MerchantNonce) && string.Equals(session!.MerchantNonce, merchantNonce, StringComparison.Ordinal);
+        bool notReplayed = session?.NonceUsed != true;
+        verified = verified && nonceOk && notReplayed;
 
         int? orderId = null;
         if (verified && session != null)
         {
             session.TrxCode = authorizationCode ?? trxCode ?? session.TrxCode;
+            session.NonceUsed = true;
+            session.NonceUsedUtc = DateTime.UtcNow;
             Order order = _orders.Create(trx!, session.TrxCode ?? string.Empty, session.Amount, session.Currency, session.MaskedCard);
             orderId = order.Id;
             await _db.SaveChangesAsync();
@@ -263,18 +283,19 @@ public class DealerPaymentController : Controller
             OrderId = orderId
         };
 
-        string? signature = form?["signature"].FirstOrDefault() ?? Request.Query["signature"].FirstOrDefault();
+        string? signature = dto.signature;
         if (!string.IsNullOrWhiteSpace(signature))
         {
-            var expectedSigPayload = $"trxCode={trxCode}&OtherTrxCode={otherTrx}&resultCode={resultCode}&hashValue={hash}&nonce={form?["nonce"].FirstOrDefault()}";
+            // Build payload in the same order as API to verify signature
+            var expectedSigPayload = BuildApiSignaturePayload(trxCode, dto.OtherTrxCode ?? trx, resultCode, hash, nonce);
             var secret = _settings.RedirectHmacSecret;
             string expectedSig = string.Empty;
             if (!string.IsNullOrWhiteSpace(secret))
             {
-                using var h = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(secret));
+                using var h = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
                 expectedSig = Convert.ToHexString(h.ComputeHash(Encoding.UTF8.GetBytes(expectedSigPayload))).ToLowerInvariant();
             }
-            if (!string.IsNullOrWhiteSpace(expectedSig) && string.Equals(expectedSig, signature, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(expectedSig) && SignaturesEqual(expectedSig, signature))
             {
                 vm.ApiVerified = true;
                 vm.ApiExpectedHash = expectedSig;
@@ -282,6 +303,74 @@ public class DealerPaymentController : Controller
         }
 
         return View(vm);
+    }
+
+    private static string BuildApiSignaturePayload(string? trxCode, string? otherTrx, string? resultCode, string? hashValue, string? nonce)
+    {
+        // Match API order exactly: trxCode, OtherTrxCode, resultCode, hashValue, nonce
+        return $"trxCode={trxCode}&OtherTrxCode={otherTrx}&resultCode={resultCode}&hashValue={hashValue}&nonce={nonce}";
+    }
+
+    private static bool SignaturesEqual(string? a, string? b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+        try
+        {
+            var ba = Convert.FromHexString(a);
+            var bb = Convert.FromHexString(b);
+            return CryptographicOperations.FixedTimeEquals(ba, bb);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<KeyValuePair<string, IEnumerable<string>>> SanitizeHeaders(IHeaderDictionary headers)
+    {
+        foreach (var kv in headers)
+        {
+            var key = kv.Key;
+            if (key.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("X-API-KEY", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("Api-Key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("X-Api-Key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("Cookie", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new KeyValuePair<string, IEnumerable<string>>(key, new[] { "***" });
+            }
+            else
+            {
+                yield return new KeyValuePair<string, IEnumerable<string>>(key, kv.Value.AsEnumerable());
+            }
+        }
+    }
+    // overload for request/response header collections
+    private static IEnumerable<KeyValuePair<string, IEnumerable<string>>> SanitizeHeaders(System.Net.Http.Headers.HttpHeaders headers)
+    {
+        foreach (var kv in headers)
+        {
+            var key = kv.Key;
+            if (key.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("X-API-KEY", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("Api-Key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("X-Api-Key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("Cookie", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new KeyValuePair<string, IEnumerable<string>>(key, new[] { "***" });
+            }
+            else
+            {
+                yield return kv;
+            }
+        }
+    }
+
+    private static string AppendQueryParam(string? url, string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return url ?? string.Empty;
+        var separator = url.Contains('?') ? '&' : '?';
+        return url + separator + Uri.EscapeDataString(key) + "=" + Uri.EscapeDataString(value);
     }
 
     private DealerPaymentInputModel BuildNewModel()
@@ -310,7 +399,9 @@ public class DealerPaymentController : Controller
 
     private static string MaskCard(string number)
     {
-        if (string.IsNullOrWhiteSpace(number) || number.Length < 8) return "****";
-        return number.Substring(0, 6) + new string('*', Math.Max(0, number.Length - 10)) + number[^4..];
+        if (string.IsNullOrWhiteSpace(number)) return "****";
+        var digits = new string(number.Where(char.IsDigit).ToArray());
+        if (digits.Length < 8) return "****";
+        return digits.Substring(0, 6) + new string('*', Math.Max(0, digits.Length - 10)) + digits[^4..];
     }
 }
