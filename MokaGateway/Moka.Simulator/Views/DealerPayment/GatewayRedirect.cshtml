@@ -1,4 +1,4 @@
-@model Moka.Simulator.Models.DealerPaymentInputModel
+ï»¿@model Moka.Simulator.Models.DealerPaymentInputModel
 @{
  Layout = null;
  var target = Model.PostUrl!;
@@ -7,16 +7,16 @@
 <html>
 <head>
  <meta charset="utf-8" />
- <title>Yönlendiriliyor...</title>
+ <title>Y&#246;nlendiriliyor...</title>
  <meta http-equiv="refresh" content="0;url=@target" />
  <script>
  window.location.replace('@target');
  </script>
 </head>
 <body>
- <p>Yönlendiriliyor... Eðer yönlendirilmezseniz <a href="@target">buraya týklayýn</a>.</p>
+ <p>Y&#246;nlendiriliyor... E&#287;er y&#246;nlendirilmezseniz <a href="@target">buraya t&#305;klay&#305;n</a>.</p>
  <noscript>
- <p>JavaScript kapalý. Devam etmek için <a href="@target">týklayýn</a>.</p>
+ <p>JavaScript kapal&#305;. Devam etmek i&#231;in <a href="@target">t&#305;klay&#305;n</a>.</p>
  </noscript>
 </body>
 </html>

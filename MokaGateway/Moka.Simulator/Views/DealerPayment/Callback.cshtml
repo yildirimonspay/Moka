@@ -1,4 +1,4 @@
-@model Moka.Simulator.Models.PaymentCallbackViewModel
+ï»¿@model Moka.Simulator.Models.PaymentCallbackViewModel
 @{
     ViewData["Title"] = "Payment Callback";
 }
@@ -13,24 +13,24 @@
     <dt class="col-sm-2">Result Message</dt>
     <dd class="col-sm-10">@Model.ResultMessage</dd>
     <dt class="col-sm-2">Local Verify</dt>
-    <dd class="col-sm-10">@(Model.Verified ? "Onaylandý" : "Onaylanamadý")</dd>
+    <dd class="col-sm-10">@(Model.Verified ? "Onayland&#305;" : "Onaylanamad&#305;")</dd>
     <dt class="col-sm-2">Local Expected Hash</dt>
     <dd class="col-sm-10">@Model.LocalExpectedHash</dd>
     <dt class="col-sm-2">API Verify</dt>
-    <dd class="col-sm-10">@(Model.ApiVerified ? "Onaylandý" : "Hayýr")</dd>
+    <dd class="col-sm-10">@(Model.ApiVerified ? "Onayland&#305;" : "Hay&#305;r")</dd>
     <dt class="col-sm-2">API Expected Hash</dt>
     <dd class="col-sm-10">@Model.ApiExpectedHash</dd>
     @if (Model.Verified && Model.OrderId.HasValue)
     {
-        <dt class="col-sm-2">Sipariþ No</dt>
+        <dt class="col-sm-2">Sipari&#351; No</dt>
         <dd class="col-sm-10">@Model.OrderId</dd>
     }
 </dl>
 @if (Model.Verified)
 {
-    <p>Ödeme doðrulandý ve sipariþ oluþturuldu.</p>
+    <p>&#214;deme do&#287;ruland&#305; ve sipari&#351; olu&#351;turuldu.</p>
 }
 <p>
-    <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">Yeni Ödeme</a>
-    <a class="btn btn-link" asp-controller="Orders" asp-action="Index">Sipariþ Listesi</a>
+    <a class="btn btn-secondary" asp-controller="DealerPayment" asp-action="Create">Yeni &#214;deme</a>
+    <a class="btn btn-link" asp-controller="Orders" asp-action="Index">Sipari&#351; Listesi</a>
 </p>

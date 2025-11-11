@@ -8,3 +8,32 @@
 2025-11-11 11:44:44.179 +03:00 [Information]  Moka.Api started
 2025-11-11 11:47:48.251 +03:00 [Information]  DB migration completed
 2025-11-11 11:47:48.439 +03:00 [Information]  Moka.Api started
+2025-11-11 12:12:37.577 +03:00 [Information]  DB migration completed
+2025-11-11 12:12:37.762 +03:00 [Information]  Moka.Api started
+2025-11-11 13:46:10.869 +03:00 [Information]  DB migration completed
+2025-11-11 13:46:11.069 +03:00 [Information]  Moka.Api started
+2025-11-11 13:46:25.671 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="374427*****1042"
+2025-11-11 13:46:26.158 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 589.9620 ms
+2025-11-11 14:49:41.678 +03:00 [Information]  DB migration completed
+2025-11-11 14:49:41.900 +03:00 [Information]  Moka.Api started
+2025-11-11 14:57:25.957 +03:00 [Information]  DB migration completed
+2025-11-11 14:57:26.165 +03:00 [Information]  Moka.Api started
+2025-11-11 14:57:35.291 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="979236******0872"
+2025-11-11 14:57:35.715 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 549.3135 ms
+2025-11-11 14:58:16.492 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="375624*****1036"
+2025-11-11 14:58:16.585 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 96.4974 ms
+2025-11-11 14:59:25.362 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="979236******0872"
+2025-11-11 14:59:25.380 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="979236******0872"
+2025-11-11 14:59:47.699 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 22338.5299 ms
+2025-11-11 14:59:47.700 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 22325.2331 ms
+2025-11-11 15:00:05.289 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="432954******8011"
+2025-11-11 15:00:31.874 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 26585.6828 ms
+2025-11-11 15:00:32.237 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 75.5016 ms
+2025-11-11 15:00:32.307 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/favicon.ico" responded 404 in 0.1251 ms
+2025-11-11 15:01:05.833 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 28743.9803 ms
+2025-11-11 15:04:04.094 +03:00 [Information]  DB migration completed
+2025-11-11 15:04:04.290 +03:00 [Information]  Moka.Api started
+2025-11-11 15:06:02.809 +03:00 [Information] Moka.Api.Controllers.PaymentDealerContoller 3D request Amount=100.99 Currency="TL" MaskedCard="427314******9012"
+2025-11-11 15:06:10.476 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/DoDirectPaymentThreeD" responded 200 in 7753.4175 ms
+2025-11-11 15:06:10.978 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "GET" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 143.6113 ms
+2025-11-11 15:06:56.114 +03:00 [Information] Serilog.AspNetCore.RequestLoggingMiddleware HTTP "POST" "/PaymentDealer/PaymentDealerThreeDProcess" responded 200 in 39014.7870 ms

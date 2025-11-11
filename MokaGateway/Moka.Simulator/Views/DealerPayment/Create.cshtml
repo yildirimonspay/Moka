@@ -1,110 +1,110 @@
-@model Moka.Simulator.Models.DealerPaymentInputModel
+ï»¿@model Moka.Simulator.Models.DealerPaymentInputModel
 @{
- ViewData["Title"] = "Dealer Payment";
- var cards = Model.TestCards ?? new List<Moka.Simulator.Models.TestCard>();
+    ViewData["Title"] = "Dealer Payment";
+    var cards = Model.TestCards ?? new List<Moka.Simulator.Models.TestCard>();
 }
 
 <form asp-action="Create" method="post" novalidate>
- <div class="mb-3">
- <div asp-validation-summary="All" class="alert alert-danger" role="alert" style="display:@(ViewData.ModelState.ErrorCount>0?"block":"none")"></div>
- </div>
- <div class="row">
- <div class="col-md-8">
- <h4>Kart Bilgileri</h4>
- <div class="mb-3">
- <label class="form-label" for="testCardSelect">Test Kartý Seç</label>
- <select id="testCardSelect" class="form-select">
- <option value="">Test kart seçiniz...</option>
- @foreach (var c in cards)
- {
- <option data-number="@c.Number" data-holder="@c.Holder" data-exp-month="@c.ExpMonth" data-exp-year="@c.ExpYear" data-cvc="@c.Cvc">@c.Brand - @c.Number</option>
- }
- </select>
- </div>
- <div class="mb-3">
- <label asp-for="CardHolderFullName" class="form-label"></label>
- <input asp-for="CardHolderFullName" class="form-control" />
- <span asp-validation-for="CardHolderFullName" class="text-danger"></span>
- </div>
- <div class="mb-3">
- <label asp-for="CardNumber" class="form-label"></label>
- <input asp-for="CardNumber" class="form-control" autocomplete="off" />
- <span asp-validation-for="CardNumber" class="text-danger"></span>
- </div>
- <div class="row mb-3">
- <div class="col">
- <label asp-for="ExpMonth" class="form-label"></label>
- <select asp-for="ExpMonth" class="form-select" asp-items="Model.ExpireMonths"></select>
- <span asp-validation-for="ExpMonth" class="text-danger"></span>
- </div>
- <div class="col">
- <label asp-for="ExpYear" class="form-label"></label>
- <select asp-for="ExpYear" class="form-select" asp-items="Model.ExpireYears"></select>
- <span asp-validation-for="ExpYear" class="text-danger"></span>
- </div>
- </div>
- <div class="mb-3">
- <label asp-for="CvcNumber" class="form-label"></label>
- <input asp-for="CvcNumber" class="form-control" autocomplete="off" />
- <span asp-validation-for="CvcNumber" class="text-danger"></span>
- </div>
- <h4>Ödeme</h4>
- <div class="mb-3">
- <label asp-for="Amount" class="form-label"></label>
- <input asp-for="Amount" class="form-control" />
- <span asp-validation-for="Amount" class="text-danger"></span>
- </div>
- <div class="mb-3">
- <label asp-for="InstallmentNumber" class="form-label"></label>
- <input asp-for="InstallmentNumber" class="form-control" />
- <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
- </div>
- @* Backend result info (if any) *@
- @if (ViewData.ModelState.ErrorCount >0)
- {
- <div class="card border-danger mb-3">
- <div class="card-header">Sunucu Hatalarý</div>
- <div class="card-body p-2">
- <ul class="mb-0 small">
- @foreach (var entry in ViewData.ModelState.Where(ms => ms.Value!.Errors.Count >0))
- {
- foreach (var err in entry.Value!.Errors)
- {
- <li>@err.ErrorMessage</li>
- }
- }
- </ul>
- </div>
- </div>
- }
- </div>
- </div>
- <button type="submit" class="btn btn-primary">Ödemeyi Gönder</button>
+    <div class="mb-3">
+        <div asp-validation-summary="All" class="alert alert-danger" role="alert" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "block" : "none")"></div>
+    </div>
+    <div class="row">
+        <div class="col-md-8">
+            <h4>Kart Bilgileri</h4>
+            <div class="mb-3">
+                <label class="form-label" for="testCardSelect">Test Kart&#305; Se&#231;</label>
+                <select id="testCardSelect" class="form-select">
+                    <option value="">Test kart se&#231;iniz...</option>
+                    @foreach (var c in cards)
+                    {
+                        <option data-number="@c.Number" data-holder="@c.Holder" data-exp-month="@c.ExpMonth" data-exp-year="@c.ExpYear" data-cvc="@c.Cvc">@c.Brand - @c.Number</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-3">
+                <label asp-for="CardHolderFullName" class="form-label"></label>
+                <input asp-for="CardHolderFullName" class="form-control" />
+                <span asp-validation-for="CardHolderFullName" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="CardNumber" class="form-label"></label>
+                <input asp-for="CardNumber" class="form-control" autocomplete="off" />
+                <span asp-validation-for="CardNumber" class="text-danger"></span>
+            </div>
+            <div class="row mb-3">
+                <div class="col">
+                    <label asp-for="ExpMonth" class="form-label"></label>
+                    <select asp-for="ExpMonth" class="form-select" asp-items="Model.ExpireMonths"></select>
+                    <span asp-validation-for="ExpMonth" class="text-danger"></span>
+                </div>
+                <div class="col">
+                    <label asp-for="ExpYear" class="form-label"></label>
+                    <select asp-for="ExpYear" class="form-select" asp-items="Model.ExpireYears"></select>
+                    <span asp-validation-for="ExpYear" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label asp-for="CvcNumber" class="form-label"></label>
+                <input asp-for="CvcNumber" class="form-control" autocomplete="off" />
+                <span asp-validation-for="CvcNumber" class="text-danger"></span>
+            </div>
+            <h4>&#214;deme</h4>
+            <div class="mb-3">
+                <label asp-for="Amount" class="form-label"></label>
+                <input asp-for="Amount" class="form-control" />
+                <span asp-validation-for="Amount" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="InstallmentNumber" class="form-label"></label>
+                <input asp-for="InstallmentNumber" class="form-control" />
+                <span asp-validation-for="InstallmentNumber" class="text-danger"></span>
+            </div>
+            @* Backend result info (if any) *@
+            @if (ViewData.ModelState.ErrorCount > 0)
+            {
+                <div class="card border-danger mb-3">
+                    <div class="card-header">Sunucu Hatalar&#305;</div>
+                    <div class="card-body p-2">
+                        <ul class="mb-0 small">
+                            @foreach (var entry in ViewData.ModelState.Where(ms => ms.Value!.Errors.Count > 0))
+                            {
+                                foreach (var err in entry.Value!.Errors)
+                                {
+                                    <li>@err.ErrorMessage</li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">&#214;demeyi G&#246;nder</button>
 </form>
 @section Scripts {
- <partial name="_ValidationScriptsPartial" />
- <script>
- (function(){
- const select = document.getElementById('testCardSelect');
- const cardNumber = document.getElementById('CardNumber');
- const holder = document.getElementById('CardHolderFullName');
- const expMonth = document.getElementById('ExpMonth');
- const expYear = document.getElementById('ExpYear');
- const cvc = document.getElementById('CvcNumber');
- if(!select) return;
- select.addEventListener('change', function(){
- const opt = select.selectedOptions[0];
- if(!opt || !opt.dataset.number) return;
- holder && (holder.value = opt.dataset.holder || holder.value);
- cardNumber && (cardNumber.value = opt.dataset.number);
- expMonth && (expMonth.value = opt.dataset.expMonth);
- expYear && (expYear.value = opt.dataset.expYear);
- cvc && (cvc.value = opt.dataset.cvc);
- });
- // Scroll to errors if any
- if (document.querySelector('.alert.alert-danger')) {
- window.scrollTo({top:0, behavior:'smooth'});
- }
- })();
- </script>
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function(){
+        const select = document.getElementById('testCardSelect');
+        const cardNumber = document.getElementById('CardNumber');
+        const holder = document.getElementById('CardHolderFullName');
+        const expMonth = document.getElementById('ExpMonth');
+        const expYear = document.getElementById('ExpYear');
+        const cvc = document.getElementById('CvcNumber');
+        if(!select) return;
+        select.addEventListener('change', function(){
+        const opt = select.selectedOptions[0];
+        if(!opt || !opt.dataset.number) return;
+        holder && (holder.value = opt.dataset.holder || holder.value);
+        cardNumber && (cardNumber.value = opt.dataset.number);
+        expMonth && (expMonth.value = opt.dataset.expMonth);
+        expYear && (expYear.value = opt.dataset.expYear);
+        cvc && (cvc.value = opt.dataset.cvc);
+        });
+        // Scroll to errors if any
+        if (document.querySelector('.alert.alert-danger')) {
+        window.scrollTo({top:0, behavior:'smooth'});
+        }
+        })();
+    </script>
 }

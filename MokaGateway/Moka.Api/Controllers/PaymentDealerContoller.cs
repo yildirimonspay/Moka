@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Moka.Contracts.Helper;
 using Moka.Contracts.Payments;
 using Moka.Contracts.Settings;
 using Swashbuckle.AspNetCore.Filters;
@@ -23,30 +24,6 @@ public class PaymentDealerContoller : ControllerBase
         _logger = logger;
         _settings = settings.Value;
         _db = db;
-    }
-
-    // helper: return an HTML page that auto-posts given fields to target url
-    public static ContentResult ToUrlAutoPost(string url, IDictionary<string,string> fields)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-            throw new ArgumentException("Invalid url");
-        var sb = new StringBuilder(1024);
-        sb.AppendLine("<!doctype html>");
-        sb.AppendLine("<html lang=\"en\"><head>");
-        sb.AppendLine("<meta charset=\"utf-8\"/>");
-        sb.AppendLine("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self' 'unsafe-inline' data:;\">");
-        sb.AppendLine("</head><body>");
-        sb.AppendLine($"<form id=\"f\" method=\"post\" action=\"{System.Net.WebUtility.HtmlEncode(url)}\">");
-        foreach (var kv in fields)
-        {
-            var name = System.Net.WebUtility.HtmlEncode(kv.Key);
-            var value = System.Net.WebUtility.HtmlEncode(kv.Value ?? "");
-            sb.AppendLine($"<input type=\"hidden\" name=\"{name}\" value=\"{value}\" />");
-        }
-        sb.AppendLine("</form>");
-        sb.AppendLine("<script> (function(){ var f=document.getElementById('f'); if(f) { try{ f.submit(); } catch(e){ } }})();</script>");
-        sb.AppendLine("</body></html>");
-        return new ContentResult { Content = sb.ToString(), ContentType = "text/html; charset=utf-8", StatusCode =200 };
     }
 
     [HttpPost("DoDirectPaymentThreeD")]
@@ -89,7 +66,7 @@ public class PaymentDealerContoller : ControllerBase
         if (!string.IsNullOrWhiteSpace(maskedCard))
         {
             var digits = new string(maskedCard.Where(char.IsDigit).ToArray());
-            if (digits.Length >=10) maskedCard = digits.Substring(0,6) + new string('*', digits.Length -10) + digits[^4..];
+            if (digits.Length >= 10) maskedCard = digits.Substring(0, 6) + new string('*', digits.Length - 10) + digits[^4..];
         }
         _logger.LogInformation("3D request Amount={amt} Currency={cur} MaskedCard={mc}", request.PaymentDealerRequest?.Amount, request.PaymentDealerRequest?.Currency, maskedCard);
 
@@ -98,22 +75,34 @@ public class PaymentDealerContoller : ControllerBase
             var req = request.PaymentDealerRequest;
             // RedirectUrl required
             if (string.IsNullOrWhiteSpace(req.RedirectUrl))
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.RedirectUrlRequired", ResultMessage = "RedirectUrl required", Data = null });
+            }
             // Currency whitelist
             var allowed = new[] { "TL", "USD", "EUR", "GBP", null, string.Empty };
             if (!allowed.Contains(req.Currency))
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.InvalidCurrencyCode", ResultMessage = "Invalid currency", Data = null });
+            }
             // Installment rules
-            if (req.InstallmentNumber <0 || req.InstallmentNumber >12)
+            if (req.InstallmentNumber < 0 || req.InstallmentNumber > 12)
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.InvalidInstallmentNumber", ResultMessage = "Invalid installment", Data = null });
+            }
             // Card vs Token exclusivity
             if (string.IsNullOrWhiteSpace(req.CardNumber) && string.IsNullOrWhiteSpace(req.CardToken))
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.OnlyCardTokenOrCardNumber", ResultMessage = "Provide card or token", Data = null });
+            }
             if (!string.IsNullOrWhiteSpace(req.CardNumber) && !string.IsNullOrWhiteSpace(req.CardToken))
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.OnlyCardTokenOrCardNumber", ResultMessage = "Provide only one of card or token", Data = null });
+            }
             // ReturnHash must be1
-            if (req.ReturnHash !=1)
+            if (req.ReturnHash != 1)
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.InvalidRequest", ResultMessage = "ReturnHash must be1", Data = null });
+            }
         }
         catch (Exception ex)
         {
@@ -121,60 +110,90 @@ public class PaymentDealerContoller : ControllerBase
         }
 
         // IP whitelist (optional)
-        if (_settings.AllowedIps != null && _settings.AllowedIps.Length >0)
+        if (_settings.AllowedIps != null && _settings.AllowedIps.Length > 0)
         {
             var clientIp = request.PaymentDealerRequest.ClientIP ?? string.Empty;
             if (!_settings.AllowedIps.Contains(clientIp))
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.IpAddressNotAllowed", ResultMessage = "IP not allowed", Data = null });
+            }
         }
 
         var s = _settings;
         var reqPay = request.PaymentDealerRequest;
         // Tokenization permissions
         if (!string.IsNullOrWhiteSpace(reqPay.CardToken) && s.AllowTokenization == false)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.TokenizationNotAvailableForDealer", ResultMessage = "Tokenization not allowed", Data = null });
-        if (reqPay.IsTokenized ==1 && s.AllowTokenization == false)
+        }
+        if (reqPay.IsTokenized == 1 && s.AllowTokenization == false)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.TokenizationNotAvailableForDealer", ResultMessage = "Tokenization not allowed", Data = null });
-        if (reqPay.IsTokenized ==1 && !string.IsNullOrWhiteSpace(reqPay.CardToken))
+        }
+        if (reqPay.IsTokenized == 1 && !string.IsNullOrWhiteSpace(reqPay.CardToken))
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.CardTokenCannotUseWithSaveCard", ResultMessage = "Cannot use token and save card", Data = null });
+        }
         if (!string.IsNullOrWhiteSpace(reqPay.CardToken) && !string.IsNullOrWhiteSpace(reqPay.CardNumber))
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.OnlyCardTokenOrCardNumber", ResultMessage = "Only card token or card number allowed", Data = null });
+        }
 
         // Pool payment permissions
-        if (reqPay.IsPoolPayment ==1 && s.AllowPoolPayments == false)
+        if (reqPay.IsPoolPayment == 1 && s.AllowPoolPayments == false)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.PoolPaymentNotAvailableForDealer", ResultMessage = "Pool payment not allowed", Data = null });
-        if (reqPay.IsPoolPayment ==0 && s.ForcePoolPayments)
+        }
+        if (reqPay.IsPoolPayment == 0 && s.ForcePoolPayments)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.PoolPaymentRequiredForDealer", ResultMessage = "Pool payment required", Data = null });
+        }
 
         // PreAuth permissions
-        if (reqPay.IsPreAuth ==1 && s.AllowPreAuth == false)
+        if (reqPay.IsPreAuth == 1 && s.AllowPreAuth == false)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.AuthorizationForbiddenForThisDealer", ResultMessage = "PreAuth forbidden", Data = null });
-        if (reqPay.IsPreAuth ==0 && s.AllowPreAuth && reqPay.IsPoolPayment ==0 && reqPay.InstallmentNumber >1)
+        }
+        if (reqPay.IsPreAuth == 0 && s.AllowPreAuth && reqPay.IsPoolPayment == 0 && reqPay.InstallmentNumber > 1)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.PaymentMustBeAuthorization", ResultMessage = "Payment must be authorization for installments", Data = null });
+        }
 
         // Installment foreign currency restriction
-        if (!string.IsNullOrWhiteSpace(reqPay.Currency) && reqPay.Currency != "TL" && reqPay.InstallmentNumber >1)
+        if (!string.IsNullOrWhiteSpace(reqPay.Currency) && reqPay.Currency != "TL" && reqPay.InstallmentNumber > 1)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.InstallmentNotAvailableForForeignCurrencyTransaction", ResultMessage = "No installments for foreign currency", Data = null });
+        }
         if (!string.IsNullOrWhiteSpace(reqPay.Currency) && s.ForeignCurrenciesEnabled != null && !s.ForeignCurrenciesEnabled.Contains(reqPay.Currency) && reqPay.Currency != "TL")
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ForeignCurrencyNotAvailableForThisDealer", ResultMessage = "Foreign currency not allowed", Data = null });
+        }
 
         // SubMerchant name validation (use SubMerchantName field)
         if (!string.IsNullOrWhiteSpace(reqPay.SubMerchantName) && s.AllowedSubMerchants != null && !s.AllowedSubMerchants.Contains(reqPay.SubMerchantName))
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.InvalidSubMerchantName", ResultMessage = "Invalid sub merchant", Data = null });
+        }
 
         // Software validation
         if (!string.IsNullOrWhiteSpace(reqPay.Software) && s.AllowedSoftware != null && !s.AllowedSoftware.Contains(reqPay.Software))
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ChannelPermissionNotAvailable", ResultMessage = "Software/channel not permitted", Data = null });
+        }
 
         // Product basket validation for known codes
-        if (reqPay.BasketProducts != null && reqPay.BasketProducts.Count >0 && s.KnownProductCodes != null)
+        if (reqPay.BasketProducts != null && reqPay.BasketProducts.Count > 0 && s.KnownProductCodes != null)
         {
             foreach (var bp in reqPay.BasketProducts)
             {
                 if (!string.IsNullOrWhiteSpace(bp.ProductCode) && !s.KnownProductCodes.Contains(bp.ProductCode))
+                {
                     return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.BasketProductNotFoundInYourProductList", ResultMessage = "Unknown product", Data = null });
-                if (string.IsNullOrWhiteSpace(bp.ProductCode) && bp.ProductId ==0)
+                }
+                if (string.IsNullOrWhiteSpace(bp.ProductCode) && bp.ProductId == 0)
+                {
                     return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.MustBeOneOfDealerProductIdOrProductCode", ResultMessage = "Need product id or code", Data = null });
+                }
             }
         }
 
@@ -185,36 +204,52 @@ public class PaymentDealerContoller : ControllerBase
         {
             var first = results.FirstOrDefault();
             if (first != null)
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = first.ErrorMessage, ResultMessage = string.Empty, Data = null });
+            }
         }
 
         // Daily limits (simple aggregate for today)
         DateTime today = DateTime.UtcNow.Date;
         decimal dealerToday = await _db.Payments.Where(p => p.CreatedUtc >= today && p.CreatedUtc < today.AddDays(1)).SumAsync(p => p.Amount);
         if (dealerToday + request.PaymentDealerRequest.Amount > _settings.DailyDealerLimit)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckDealerPaymentLimits.DailyDealerLimitExceeded", ResultMessage = "Dealer daily limit exceeded", Data = null });
+        }
         string cardBin = new string((request.PaymentDealerRequest.CardNumber ?? string.Empty).Where(char.IsDigit).ToArray());
-        cardBin = cardBin.Length >=6 ? cardBin.Substring(0,6) : cardBin;
+        cardBin = cardBin.Length >= 6 ? cardBin.Substring(0, 6) : cardBin;
         decimal cardToday = await _db.Payments.Where(p => p.CreatedUtc >= today && p.CreatedUtc < today.AddDays(1) && p.CardBin == cardBin).SumAsync(p => p.Amount);
         if (cardToday + request.PaymentDealerRequest.Amount > _settings.DailyCardLimit)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckDealerPaymentLimits.DailyCardLimitExceeded", ResultMessage = "Card daily limit exceeded", Data = null });
+        }
         // Max installment dealer-level
         if (request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallment)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ThisInstallmentNumberNotAvailableForDealer", ResultMessage = "Installment exceeds dealer max", Data = null });
+        }
 
         // Virtual POS availability by BIN (simulate). If BIN not allowed => VirtualPosNotFound
-        if (_settings.AllowedBins != null && _settings.AllowedBins.Length >0 && !string.IsNullOrWhiteSpace(cardBin) && !_settings.AllowedBins.Any(b => cardBin.StartsWith(b)))
+        if (_settings.AllowedBins != null && _settings.AllowedBins.Length > 0 && !string.IsNullOrWhiteSpace(cardBin) && !_settings.AllowedBins.Any(b => cardBin.StartsWith(b)))
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.CheckPaymentDealerAuthentication.VirtualPosNotFound", ResultMessage = "Virtual POS not found for BIN", Data = null });
+        }
         // Installment number exceeds virtual pos capability
         if (request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallmentPerVirtualPos)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.ThisInstallmentNumberNotAvailableForVirtualPos", ResultMessage = "Installment exceeds virtual pos limit", Data = null });
+        }
         // Commission required for installments
-        if (_settings.RequireCommissionForInstallments && request.PaymentDealerRequest.InstallmentNumber >1 && (request.PaymentDealerRequest.CommissionRate == null || request.PaymentDealerRequest.GroupCommissionRate == null))
+        if (_settings.RequireCommissionForInstallments && request.PaymentDealerRequest.InstallmentNumber > 1 && (request.PaymentDealerRequest.CommissionRate == null || request.PaymentDealerRequest.GroupCommissionRate == null))
         {
             if (request.PaymentDealerRequest.CommissionRate == null)
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerCommissionRateNotFound", ResultMessage = "Dealer commission missing", Data = null });
+            }
             if (request.PaymentDealerRequest.GroupCommissionRate == null)
+            {
                 return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerGroupCommissionRateNotFound", ResultMessage = "Group commission missing", Data = null });
+            }
         }
 
         // generate nonce and append to redirect url
@@ -225,18 +260,20 @@ public class PaymentDealerContoller : ControllerBase
         if (!redirectUrl.Contains("?")) redirectUrl += "?nonce=" + Uri.EscapeDataString(nonce);
         else redirectUrl += "&nonce=" + Uri.EscapeDataString(nonce);
         // Realistic trxCode: numeric auth-like placeholder
-        string trxCode = Random.Shared.NextInt64(100000000000,999999999999).ToString();
+        string trxCode = Random.Shared.NextInt64(100000000000, 999999999999).ToString();
         string threeDTrxCode = Guid.NewGuid().ToString("N");
 
         string cardBinForEntity = new string((request.PaymentDealerRequest.CardNumber ?? string.Empty).Where(char.IsDigit).ToArray());
-        cardBinForEntity = cardBinForEntity.Length >=6 ? cardBinForEntity.Substring(0,6) : cardBinForEntity;
+        cardBinForEntity = cardBinForEntity.Length >= 6 ? cardBinForEntity.Substring(0, 6) : cardBinForEntity;
         // generate authorization code placeholder (will be final after bank callback)
         string provisionalAuthCode = string.Empty; // empty until bank authorization
         DateTime otpExpiry = DateTime.UtcNow.AddMinutes(5);
 
         // VirtualPosNotAvailable scenario example: BIN allowed but installment > dealer MaxInstallmentPerVirtualPos
         if (_settings.AllowedBins != null && _settings.AllowedBins.Any(b => cardBinForEntity.StartsWith(b)) && request.PaymentDealerRequest.InstallmentNumber > _settings.MaxInstallmentPerVirtualPos)
+        {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.VirtualPosNotAvailable", ResultMessage = "POS not available for selected installment", Data = null });
+        }
 
         var entity = new Data.PaymentEntity
         {
@@ -252,15 +289,15 @@ public class PaymentDealerContoller : ControllerBase
             CardBin = cardBinForEntity,
             AuthorizationCode = provisionalAuthCode,
             OtpExpiresUtc = otpExpiry,
-            OtpFailCount =0,
-            OtpMaxAttempts =3,
+            OtpFailCount = 0,
+            OtpMaxAttempts = 3,
             CreatedUtc = DateTime.UtcNow
         };
         _db.Payments.Add(entity);
         await _db.SaveChangesAsync();
 
         // Commission enrichment (simple demo): if installment>1 and commission provided add warning if rate <1%
-        if (request.PaymentDealerRequest.InstallmentNumber >1 && request.PaymentDealerRequest.CommissionRate.HasValue && request.PaymentDealerRequest.CommissionRate.Value <0.01m)
+        if (request.PaymentDealerRequest.InstallmentNumber > 1 && request.PaymentDealerRequest.CommissionRate.HasValue && request.PaymentDealerRequest.CommissionRate.Value < 0.01m)
         {
             return Ok(new DealerPaymentServicePaymentResult { ResultCode = "PaymentDealer.DoDirectPayment3dRequest.DealerCommissionRateNotFound", ResultMessage = "Commission rate too low", Data = null });
         }
@@ -284,7 +321,7 @@ public class PaymentDealerContoller : ControllerBase
         sb.Append("<button type='submit'>Doðrula</button></form>");
         // OTP info
         var remaining = Math.Max(0, entity.OtpMaxAttempts - entity.OtpFailCount);
-        var expiresIn = entity.OtpExpiresUtc.HasValue ? (int)(entity.OtpExpiresUtc.Value - DateTime.UtcNow).TotalSeconds :0;
+        var expiresIn = entity.OtpExpiresUtc.HasValue ? (int)(entity.OtpExpiresUtc.Value - DateTime.UtcNow).TotalSeconds : 0;
         sb.Append($"<p>Kalan deneme: {remaining}, Süre(sn): {expiresIn}</p>");
         sb.Append("</body></html>");
         return Content(sb.ToString(), "text/html", Encoding.UTF8);
@@ -301,8 +338,8 @@ public class PaymentDealerContoller : ControllerBase
             entity.Status = "Failed";
             await _db.SaveChangesAsync();
             // client-side auto POST to merchant error endpoint
-            var dict = BuildReturnFields(entity, success:false, msg:"OTP expired");
-            return ToUrlAutoPost(entity.RedirectUrl, dict);
+            var dict = BuildReturnFields(entity, success: false, msg: "OTP expired");
+            return RemotePostUtil.ToUrlAutoPost(entity.RedirectUrl, dict);
         }
         bool success = code == "1234";
         if (!success)
@@ -313,11 +350,11 @@ public class PaymentDealerContoller : ControllerBase
             {
                 entity.Status = "Failed";
                 await _db.SaveChangesAsync();
-                var dictMax = BuildReturnFields(entity, success:false, msg:"Too many invalid attempts");
-                return ToUrlAutoPost(entity.RedirectUrl, dictMax);
+                var dictMax = BuildReturnFields(entity, success: false, msg: "Too many invalid attempts");
+                return RemotePostUtil.ToUrlAutoPost(entity.RedirectUrl, dictMax);
             }
-            var dictFail = BuildReturnFields(entity, success:false, msg:"Invalid OTP");
-            return ToUrlAutoPost(entity.RedirectUrl, dictFail);
+            var dictFail = BuildReturnFields(entity, success: false, msg: "Invalid OTP");
+            return RemotePostUtil.ToUrlAutoPost(entity.RedirectUrl, dictFail);
         }
         // OTP verified; wait for bank authorization callback
         entity.Status = "OtpVerified";
@@ -325,14 +362,14 @@ public class PaymentDealerContoller : ControllerBase
         return Content($"<html><body><p>OTP doðrulandý. Banka provizyonu bekleniyor...</p><p>threeDTrxCode: {entity.ThreeDTrxCode}</p></body></html>", "text/html", Encoding.UTF8);
     }
 
-    private Dictionary<string,string> BuildReturnFields(Data.PaymentEntity entity, bool success, string msg = "")
+    private Dictionary<string, string> BuildReturnFields(Data.PaymentEntity entity, bool success, string msg = "")
     {
         string suffix = success ? "T" : "F";
         using SHA256 sha = SHA256.Create();
         string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
-        var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode={(success?"Success":"EX")}&hashValue={hashValue}&nonce={entity.Nonce}";
+        var payload = $"trxCode={entity.TrxCode}&OtherTrxCode={entity.OtherTrxCode}&resultCode={(success ? "Success" : "EX")}&hashValue={hashValue}&nonce={entity.Nonce}";
         var sig = ComputeHmac(payload, _settings.RedirectHmacSecret);
-        var dict = new Dictionary<string,string>
+        var dict = new Dictionary<string, string>
         {
             {"hashValue", hashValue},
             {"resultCode", success?"Success":"EX"},
@@ -356,7 +393,7 @@ public class PaymentDealerContoller : ControllerBase
         {
             // compute success hash and post to merchant
             if (string.IsNullOrWhiteSpace(entity.AuthorizationCode))
-                entity.AuthorizationCode = Guid.NewGuid().ToString("N").Substring(0,12).ToUpperInvariant();
+                entity.AuthorizationCode = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant();
             string suffix = "T";
             using SHA256 sha = SHA256.Create();
             string hashValue = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(entity.CodeForHash + suffix))).ToLowerInvariant();
